@@ -1,0 +1,4 @@
+# Copy to .dev.vars (git-ignored) for local development:
+#   cp .dev.vars.example .dev.vars
+# `.dev.vars` supplies secrets to `wrangler dev` — never commit it.
+AI_API_KEY=your-gemini-api-key-here

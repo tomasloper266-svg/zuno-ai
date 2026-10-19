@@ -1,0 +1,26 @@
+# ZUNO AI chat proxy — non-secret configuration ONLY.
+# Secrets (AI_API_KEY) are injected at deploy time via `wrangler secret put`.
+# See README.md for the local-dev and deploy flows.
+
+name = "zuno-ai-chat-proxy"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "zuno-chat-proxy"
+# PLACEHOLDER — replace with the real id from `wrangler d1 create zuno-chat-proxy`
+# before deploying (see README.md "Deployment").
+database_id = "00000000-0000-0000-0000-000000000000"
+
+[vars]
+# Provider selection: "gemini" (default) or "openai" (any OpenAI-compatible endpoint).
+AI_PROVIDER = "gemini"
+AI_MODEL = "gemini-2.0-flash"
+# Exact-origin allow-list (comma separated). Never use "*".
+ALLOWED_ORIGINS = "https://tomasloper266-svg.github.io,https://0clqu2zep3-4173.hosted.obvious.ai"
+
+# Local dev environment (`npm run dev` → wrangler dev --env dev):
+# the Vite dev server origin is allowed; secrets come from the git-ignored .dev.vars.
+[env.dev.vars]
+ALLOWED_ORIGINS = "http://localhost:5173"

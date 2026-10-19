@@ -340,14 +340,26 @@ html[dir='rtl'] .conversation-item .conv-btn {
   border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
-.bubble {
+/* The column stacking a bubble and its meta actions. The width cap lives HERE —
+   a percentage of .bubble-row, which the list stretches to a definite width.
+   It must never sit on .bubble itself: that column is content-sized, so a %
+   cap on the bubble is circular — during intrinsic sizing the percentage
+   resolves against nothing and short user bubbles collapse to a one-character
+   strip (min-width: 0 let the flex chain shrink all the way down). */
+.bubble-col {
+  min-width: 0;
   max-width: min(86%, 640px);
+}
+
+.bubble {
   border-radius: var(--radius);
   padding: 11px 15px;
   font-size: 14.5px;
   line-height: 1.75;
   overflow-wrap: anywhere;
-  min-width: 0;
+  /* Absolute floor (no percentage): short messages like "hi" stay a readable
+     bubble hugging their content, and no %-resolution quirk can zero the chain. */
+  min-width: 8ch;
   box-shadow: var(--bubble-shadow);
 }
 .bubble.assistant {
@@ -730,7 +742,7 @@ html[dir='rtl'] .code-block-header {
     background: rgba(2, 6, 12, 0.55);
     border: none;
   }
-  .bubble {
+  .bubble-col {
     max-width: 92%;
   }
 }

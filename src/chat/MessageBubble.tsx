@@ -28,7 +28,7 @@ export function MessageBubble({ message, t, isLastAssistant, onRegenerate }: Mes
       <span className={`avatar ${message.role}`} aria-hidden="true">
         {isUser ? t.chat.you.charAt(0) : <ZunoLogo size={20} />}
       </span>
-      <div style={{ minWidth: 0, maxWidth: '100%' }}>
+      <div className="bubble-col">
         <div className={`bubble ${message.role}`} dir="auto">
           {isUser ? message.content : renderMarkdown(message.content)}
         </div>

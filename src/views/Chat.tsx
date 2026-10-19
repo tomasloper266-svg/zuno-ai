@@ -117,7 +117,11 @@ export function Chat({
   }
 
   function toThread(items: Message[]): ThreadMessage[] {
-    return items.map((m) => ({ role: m.role, content: m.content }))
+    // The seeded greeting is app-authored display copy, not a model turn —
+    // it never enters the thread (which also keeps threads user-first).
+    return items
+      .filter((m) => !m.seeded)
+      .map((m) => ({ role: m.role, content: m.content }))
   }
 
   async function runAssistant(convId: string, thread: ThreadMessage[]): Promise<void> {
@@ -144,17 +148,28 @@ export function Chat({
     const clean = text.trim()
     if (clean === '' || pending) return
     justSentRef.current = true
-    const userMessage: Message = { id: uid(), role: 'user', content: clean, ts: Date.now() }
+    const now = Date.now()
+    const userMessage: Message = { id: uid(), role: 'user', content: clean, ts: now }
     const baseMessages = conversation?.messages ?? []
     let convId = conversation?.id ?? null
 
     if (convId === null) {
       convId = uid()
+      const greeting: Message = {
+        id: uid(),
+        role: 'assistant',
+        content: t.chat.greeting,
+        ts: now,
+        seeded: true,
+      }
       const conv: Conversation = {
         id: convId,
         title: clean.slice(0, 60),
-        createdAt: Date.now(),
-        messages: [userMessage],
+        createdAt: now,
+        // The greeting is seeded HERE, at creation, as the first message:
+        // insertion order is the ordering source of truth, so a new
+        // conversation always opens with it (no render-time re-ordering).
+        messages: [greeting, userMessage],
       }
       setConversations((prev) => [conv, ...prev].slice(0, 50))
       onSelect(convId)

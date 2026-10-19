@@ -32,6 +32,8 @@ export interface Strings {
     privacyNote: string
     emptyTitle: string
     emptyHint: string
+    /** Seeded as the first message of every new conversation. */
+    greeting: string
     copy: string
     copied: string
     regenerate: string
@@ -96,6 +98,7 @@ export const strings: Record<Lang, Strings> = {
       privacyNote: 'Privacy: ZUNO runs on Google Gemini’s free tier — Google may use prompts and responses to improve its products, and processing may involve human review. Please don’t send sensitive personal data.',
       emptyTitle: 'How can I help today?',
       emptyHint: 'Ask a question, or pick a starting point from the home screen.',
+      greeting: "Hello! I'm ZUNO. How can I help you today?",
       copy: 'Copy',
       copied: 'Copied',
       regenerate: 'Regenerate',
@@ -158,6 +161,7 @@ export const strings: Record<Lang, Strings> = {
       privacyNote: 'الخصوصية: يعمل زونو على الخطة المجانية من Gemini — قد تستخدم Google الرسائل والردود لتحسين منتجاتها، وقد تشمل المعالجة مراجعة بشرية. يُرجى عدم إرسال بيانات شخصية حساسة.',
       emptyTitle: 'كيف أقدر أساعدك اليوم؟',
       emptyHint: 'اطرح سؤالك، أو اختر نقطة بداية من الصفحة الرئيسية.',
+      greeting: 'مرحبًا! أنا زونو. كيف يمكنني مساعدتك اليوم؟',
       copy: 'نسخ',
       copied: 'تم النسخ',
       regenerate: 'إعادة التوليد',

@@ -1,4 +1,12 @@
+import type { ChatErrorKind } from '../lib/engine'
+
 export type Lang = 'en' | 'ar'
+
+/** Title + body pair for one chat error banner. */
+export interface BannerCopy {
+  title: string
+  body: string
+}
 
 export interface EntryItem {
   id: 'coding' | 'learning' | 'writing' | 'explore'
@@ -38,8 +46,7 @@ export interface Strings {
     copied: string
     regenerate: string
     retry: string
-    errorTitle: string
-    errorBody: string
+    errors: Record<ChatErrorKind, BannerCopy>
     delete: string
     you: string
     jumpToLatest: string
@@ -103,8 +110,24 @@ export const strings: Record<Lang, Strings> = {
       copied: 'Copied',
       regenerate: 'Regenerate',
       retry: 'Retry',
-      errorTitle: 'Something went wrong',
-      errorBody: 'The message could not be sent. Check your connection and try again.',
+      errors: {
+        connection: {
+          title: 'Something went wrong',
+          body: 'The message could not be sent. Check your connection and try again.',
+        },
+        too_fast: {
+          title: 'Too fast',
+          body: "You're sending messages too quickly — please wait a moment.",
+        },
+        daily_limit: {
+          title: 'Free limit reached',
+          body: 'The free AI request limit has been reached. Please try again later.',
+        },
+        service: {
+          title: 'Service unavailable',
+          body: "ZUNO's AI service is temporarily unavailable. Please try again shortly.",
+        },
+      },
       delete: 'Delete conversation',
       you: 'You',
       jumpToLatest: 'Jump to latest',
@@ -166,8 +189,24 @@ export const strings: Record<Lang, Strings> = {
       copied: 'تم النسخ',
       regenerate: 'إعادة التوليد',
       retry: 'إعادة المحاولة',
-      errorTitle: 'حدث خطأ ما',
-      errorBody: 'تعذّر إرسال الرسالة. تحقّق من الاتصال وحاول مجددًا.',
+      errors: {
+        connection: {
+          title: 'حدث خطأ ما',
+          body: 'تعذّر إرسال الرسالة. تحقّق من الاتصال وحاول مجددًا.',
+        },
+        too_fast: {
+          title: 'بسرعة كبيرة',
+          body: 'أنت ترسل الرسائل بسرعة كبيرة — يُرجى الانتظار قليلاً.',
+        },
+        daily_limit: {
+          title: 'تم بلوغ الحد المجاني',
+          body: 'تم بلوغ الحد المسموح للطلبات المجانية على الذكاء الاصطناعي. يُرجى المحاولة لاحقاً.',
+        },
+        service: {
+          title: 'الخدمة غير متاحة',
+          body: 'خدمة الذكاء الاصطناعي غير متاحة حالياً. يُرجى المحاولة بعد قليل.',
+        },
+      },
       delete: 'حذف المحادثة',
       you: 'أنت',
       jumpToLatest: 'انتقل إلى الأحدث',

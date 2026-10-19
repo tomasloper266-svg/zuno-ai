@@ -16,17 +16,73 @@ const API_BASE = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, '') ?? ''
 
 export const IS_DEMO = API_BASE === ''
 
+/** Why a chat request failed — drives which error banner the UI shows. */
+export type ChatErrorKind = 'connection' | 'too_fast' | 'daily_limit' | 'service'
+
+/** A chat failure carrying the kind the banner UI keys on. */
+export class ChatRequestError extends Error {
+  readonly kind: ChatErrorKind
+  constructor(kind: ChatErrorKind, message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'ChatRequestError'
+    this.kind = kind
+  }
+}
+
+/** Retry-After at or below this marks a minute-scale burst limit, not an exhausted daily quota. */
+const BURST_RETRY_AFTER_MAX_SECONDS = 120
+
+/** Worker error bodies are always { error: { code } } — tolerate anything else (an intermediary may serve a non-JSON error page). */
+async function readErrorCode(res: Response): Promise<string | null> {
+  try {
+    const body = (await res.json()) as { error?: { code?: unknown } }
+    const code = body?.error?.code
+    return typeof code === 'string' ? code : null
+  } catch {
+    // Unreadable body only means no code field; status-based classification below still applies.
+    return null
+  }
+}
+
+/** Map a non-OK response to the truthful failure kind: exhausted quota, burst limit, or service fault. */
+async function classifyFailure(res: Response): Promise<ChatRequestError> {
+  const code = await readErrorCode(res)
+  const retryAfter = Number.parseInt(res.headers.get('Retry-After') ?? '', 10)
+  const burstWindow =
+    Number.isFinite(retryAfter) && retryAfter > 0 && retryAfter <= BURST_RETRY_AFTER_MAX_SECONDS
+  if (code === 'rate_limited' || res.status === 429) {
+    const detail = `status ${res.status}, code ${code ?? 'unknown'}, retry-after ${Number.isFinite(retryAfter) ? retryAfter : 'none'}`
+    return new ChatRequestError(
+      burstWindow ? 'too_fast' : 'daily_limit',
+      `Chat API rate-limited the request (${detail})`,
+    )
+  }
+  return new ChatRequestError('service', `Chat API responded with status ${res.status} (code ${code ?? 'unknown'})`)
+}
+
 export async function getAssistantReply(thread: ThreadMessage[]): Promise<string> {
   if (!IS_DEMO) {
-    const res = await fetch(`${API_BASE}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: thread }),
-    })
-    if (!res.ok) throw new Error(`Chat API responded with status ${res.status}`)
-    const data = (await res.json()) as { reply?: unknown }
+    let res: Response
+    try {
+      res = await fetch(`${API_BASE}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: thread }),
+      })
+    } catch (err) {
+      // Only a genuine network-level failure (offline, DNS, refused) lands here —
+      // every HTTP response, including error responses, is classified by classifyFailure instead.
+      throw new ChatRequestError('connection', 'Chat request failed before a response arrived', { cause: err })
+    }
+    if (!res.ok) throw await classifyFailure(res)
+    let data: { reply?: unknown }
+    try {
+      data = (await res.json()) as { reply?: unknown }
+    } catch (err) {
+      throw new ChatRequestError('service', 'Chat API returned a 200 response that was not valid JSON', { cause: err })
+    }
     if (typeof data.reply !== 'string' || data.reply.length === 0) {
-      throw new Error('Chat API returned no reply')
+      throw new ChatRequestError('service', 'Chat API returned no reply')
     }
     return data.reply
   }

@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { Conversation, Message } from '../types'
 import { uid } from '../lib/util'
-import { getAssistantReply, IS_DEMO } from '../lib/engine'
-import type { ThreadMessage } from '../lib/engine'
+import { getAssistantReply, IS_DEMO, ChatRequestError } from '../lib/engine'
+import type { ChatErrorKind, ThreadMessage } from '../lib/engine'
 import { Sidebar } from '../chat/Sidebar'
 import { MessageBubble } from '../chat/MessageBubble'
 import { Composer } from '../chat/Composer'
@@ -47,7 +47,7 @@ export function Chat({
     typeof window !== 'undefined' ? window.innerWidth <= 820 : false,
   )
   const [pending, setPending] = useState(false)
-  const [errorText, setErrorText] = useState<string | null>(null)
+  const [errorKind, setErrorKind] = useState<ChatErrorKind | null>(null)
   const [draft, setDraft] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -91,7 +91,7 @@ export function Chat({
       // Reader scrolled up to read history — never drag them down; offer a jump.
       setNewBelow(true)
     }
-  }, [activeConvId, messages.length, pending, errorText])
+  }, [activeConvId, messages.length, pending, errorKind])
 
   const NEAR_BOTTOM_PX = 120
 
@@ -126,7 +126,7 @@ export function Chat({
 
   async function runAssistant(convId: string, thread: ThreadMessage[]): Promise<void> {
     setPending(true)
-    setErrorText(null)
+    setErrorKind(null)
     try {
       const reply = await getAssistantReply(thread)
       const assistantMessage: Message = {
@@ -137,8 +137,10 @@ export function Chat({
         demo: IS_DEMO,
       }
       upsertConversation(convId, (conv) => ({ ...conv, messages: [...conv.messages, assistantMessage] }))
-    } catch {
-      setErrorText(t.chat.errorBody)
+    } catch (err) {
+      // Only genuine network failures carry kind 'connection' — every other path
+      // (quota, burst, service fault) is classified by the engine and told truthfully.
+      setErrorKind(err instanceof ChatRequestError ? err.kind : 'service')
     } finally {
       setPending(false)
     }
@@ -224,7 +226,7 @@ export function Chat({
         onNew={() => {
           onNew()
           setDraft('')
-          setErrorText(null)
+          setErrorKind(null)
           if (isMobile) setSidebarCollapsed(true)
         }}
         onDelete={(id) => setConversations((prev) => prev.filter((c) => c.id !== id))}
@@ -271,7 +273,7 @@ export function Chat({
           role="region"
           aria-label={t.chat.messagesRegion}
         >
-          {messages.length === 0 && errorText === null ? (
+          {messages.length === 0 && errorKind === null ? (
             <div className="chat-empty">
               <ZunoLogo size={44} />
               <h2>{t.chat.emptyTitle}</h2>
@@ -295,10 +297,10 @@ export function Chat({
                   onRegenerate={regenerate}
                 />
               ))}
-              {errorText !== null && (
+              {errorKind !== null && (
                 <div className="chat-error" role="alert">
                   <span>
-                    {t.chat.errorTitle} — {errorText}
+                    {t.chat.errors[errorKind].title} — {t.chat.errors[errorKind].body}
                   </span>
                   <button type="button" onClick={retry}>
                     {t.chat.retry}

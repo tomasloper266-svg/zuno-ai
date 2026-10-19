@@ -66,7 +66,7 @@ Switching provider is an env change, never a frontend rewrite:
 ```toml
 # wrangler.toml [vars]  (non-secret)
 AI_PROVIDER = "gemini"        # or "openai"
-AI_MODEL    = "gemini-flash-latest"
+AI_MODEL    = "gemini-3.5-flash-lite"
 ```
 
 The system prompt is fixed server-side (`src/prompt.ts`): bilingual

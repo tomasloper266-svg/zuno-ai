@@ -24,7 +24,7 @@ back to a clearly-labeled **demo mode** with scripted replies.
 | Highlight | highlight.js (core + 8 languages)     | Small, maintained syntax highlighting        |
 | Lint      | ESLint 9 (flat config)                | typescript-eslint + react-hooks rules        |
 | Backend   | Cloudflare Workers + D1 (see `worker/`) | Free-tier edge runtime; per-IP rate limiting |
-| AI        | Google Gemini (`gemini-flash-latest`) | Key held server-side only                    |
+| AI        | Google Gemini (`gemini-3.5-flash-lite`) | Key held server-side only                    |
 
 Runtime dependencies: `react`, `react-dom`, `highlight.js`. That's all.
 

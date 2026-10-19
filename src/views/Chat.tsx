@@ -51,7 +51,17 @@ export function Chat({
   const [draft, setDraft] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
 
+  // Stick-to-bottom auto-follow: track whether the reader is near the bottom
+  // (direction-independent scrollTop math — identical in LTR and RTL).
+  const atBottomRef = useRef(true)
+  const justSentRef = useRef(false)
+  const prevConvIdRef = useRef<string | null>(conversation?.id ?? null)
+  const [atBottom, setAtBottom] = useState(true)
+  const [newBelow, setNewBelow] = useState(false)
+  const showJump = !atBottom && (pending || newBelow)
+
   const messages = conversation?.messages ?? []
+  const activeConvId = conversation?.id ?? null
 
   useEffect(() => {
     if (seedPrompt !== '') {
@@ -62,8 +72,45 @@ export function Chat({
 
   useEffect(() => {
     const el = listRef.current
-    if (el !== null) el.scrollTo({ top: el.scrollHeight })
-  }, [messages.length, pending, errorText])
+    if (el === null) return
+    const switched = prevConvIdRef.current !== activeConvId
+    prevConvIdRef.current = activeConvId
+    if (switched || justSentRef.current) {
+      // Opening a conversation (or just sending) always lands on the newest message.
+      justSentRef.current = false
+      atBottomRef.current = true
+      setAtBottom(true)
+      setNewBelow(false)
+      el.scrollTo({ top: el.scrollHeight })
+      return
+    }
+    if (atBottomRef.current) {
+      // Reader is following the bottom — keep the newest content visible.
+      el.scrollTo({ top: el.scrollHeight })
+    } else {
+      // Reader scrolled up to read history — never drag them down; offer a jump.
+      setNewBelow(true)
+    }
+  }, [activeConvId, messages.length, pending, errorText])
+
+  const NEAR_BOTTOM_PX = 120
+
+  function handleListScroll(): void {
+    const el = listRef.current
+    if (el === null) return
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX
+    atBottomRef.current = near
+    setAtBottom(near)
+    if (near) setNewBelow(false)
+  }
+
+  function jumpToLatest(): void {
+    const el = listRef.current
+    if (el !== null) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    atBottomRef.current = true
+    setAtBottom(true)
+    setNewBelow(false)
+  }
 
   function upsertConversation(convId: string, updater: (conv: Conversation) => Conversation): void {
     setConversations((prev) => prev.map((c) => (c.id === convId ? updater(c) : c)))
@@ -96,6 +143,7 @@ export function Chat({
   async function send(text: string): Promise<void> {
     const clean = text.trim()
     if (clean === '' || pending) return
+    justSentRef.current = true
     const userMessage: Message = { id: uid(), role: 'user', content: clean, ts: Date.now() }
     const baseMessages = conversation?.messages ?? []
     let convId = conversation?.id ?? null
@@ -200,7 +248,14 @@ export function Chat({
           <Controls t={t} lang={lang} theme={theme} onToggleLang={onToggleLang} onToggleTheme={onToggleTheme} />
         </header>
 
-        <div className="message-list" ref={listRef}>
+        <div
+          className="message-list"
+          ref={listRef}
+          onScroll={handleListScroll}
+          tabIndex={0}
+          role="region"
+          aria-label={t.chat.messagesRegion}
+        >
           {messages.length === 0 && errorText === null ? (
             <div className="chat-empty">
               <ZunoLogo size={44} />
@@ -252,6 +307,14 @@ export function Chat({
         </div>
 
         <div className="composer-wrap">
+          {showJump && (
+            <button type="button" className="jump-latest" onClick={jumpToLatest}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M12 5v14M6 13l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {t.chat.jumpToLatest}
+            </button>
+          )}
           <Composer t={t} value={draft} onChange={setDraft} onSend={(v) => void send(v)} disabled={pending} />
           {!IS_DEMO && (
             <p className="privacy-note" dir="auto">

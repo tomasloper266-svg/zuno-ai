@@ -1,6 +1,10 @@
 .chat {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
+  /* The single row must be capped at the container height: an implicit `auto`
+     row grows with content instead, un-sizing the flex chain below it and
+     leaving .message-list with no overflow to scroll (the desktop scroll bug). */
+  grid-template-rows: minmax(0, 1fr);
   height: 100dvh;
   overflow: hidden;
 }
@@ -247,6 +251,7 @@ html[dir='rtl'] .conversation-item .conv-btn {
   overflow-y: auto;
   min-height: 0;
   scroll-behavior: smooth;
+  overscroll-behavior: contain; /* scroll ends here — do not chain to the document */
 }
 .message-list-inner {
   max-width: 780px;
@@ -576,7 +581,47 @@ html[dir='rtl'] .code-block-header {
 
 /* ---------- Composer ---------- */
 .composer-wrap {
+  position: relative; /* anchor for the floating jump-to-latest button */
   padding: 10px clamp(14px, 3vw, 24px) 16px;
+}
+.jump-latest {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 5;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--shadow-1);
+  animation: zuno-rise var(--speed) ease;
+  transition: border-color var(--speed) ease, color var(--speed) ease;
+}
+.jump-latest:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.jump-latest svg {
+  width: 14px;
+  height: 14px;
+}
+@keyframes zuno-rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 .privacy-note {
   max-width: 780px;

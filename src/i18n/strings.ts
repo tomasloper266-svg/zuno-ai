@@ -40,6 +40,8 @@ export interface Strings {
     errorBody: string
     delete: string
     you: string
+    jumpToLatest: string
+    messagesRegion: string
   }
 }
 
@@ -102,6 +104,8 @@ export const strings: Record<Lang, Strings> = {
       errorBody: 'The message could not be sent. Check your connection and try again.',
       delete: 'Delete conversation',
       you: 'You',
+      jumpToLatest: 'Jump to latest',
+      messagesRegion: 'Conversation messages',
     },
   },
   ar: {
@@ -162,6 +166,8 @@ export const strings: Record<Lang, Strings> = {
       errorBody: 'تعذّر إرسال الرسالة. تحقّق من الاتصال وحاول مجددًا.',
       delete: 'حذف المحادثة',
       you: 'أنت',
+      jumpToLatest: 'انتقل إلى الأحدث',
+      messagesRegion: 'رسائل المحادثة',
     },
   },
 }

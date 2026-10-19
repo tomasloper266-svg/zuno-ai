@@ -18,11 +18,12 @@ CREATE TABLE IF NOT EXISTS rate_limit_counters (
 /**
  * Fresh table per test — vitest-pool-workers isolates storage between tests,
  * so this runs on an empty D1 every time. Call it at the top of files that
- * touch the DB.
+ * touch the DB. prepare().run() sends the DDL as one statement (D1's exec()
+ * is a statement-splitting API and trips over multi-line input).
  */
 export function resetDb(): void {
   beforeEach(async () => {
-    await env.DB.exec(RATE_LIMIT_SCHEMA)
+    await env.DB.prepare(RATE_LIMIT_SCHEMA).run()
   })
 }
 

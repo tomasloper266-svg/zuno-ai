@@ -1,4 +1,5 @@
 import type { Env } from "./env"
+import { handleChat } from "./chat"
 import {
   errorResponse,
   jsonResponse,
@@ -46,9 +47,7 @@ async function route(request: Request, env: Env, requestId: string): Promise<Res
 
   if (url.pathname === "/chat") {
     if (request.method !== "POST") return methodNotAllowed(requestId, "POST")
-    // Wired up in the next milestone commit: validation, rate limiting, adapters.
-    logEvent("info", "chat_not_wired", { requestId })
-    return errorResponse("invalid_request", { status: 404 })
+    return handleChat(request, env, requestId, allowedOrigin)
   }
 
   logEvent("info", "not_found", { requestId, method: request.method, path: url.pathname })

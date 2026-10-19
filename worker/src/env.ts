@@ -12,7 +12,7 @@ export interface Env {
   AI_API_KEY?: string
   /** Which adapter to use: "gemini" (default) | "openai". */
   AI_PROVIDER?: string
-  /** Provider model id, e.g. "gemini-2.0-flash". */
+  /** Provider model id, e.g. "gemini-flash-latest" (stable alias for the latest flash model). */
   AI_MODEL?: string
   /** Optional provider base-URL override (used by tests; defaults to the real endpoint). */
   AI_BASE_URL?: string

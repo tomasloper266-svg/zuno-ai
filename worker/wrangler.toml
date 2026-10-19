@@ -16,7 +16,7 @@ database_id = "1bc54b74-243a-4b1e-8fbe-31940d85f65d"
 [vars]
 # Provider selection: "gemini" (default) or "openai" (any OpenAI-compatible endpoint).
 AI_PROVIDER = "gemini"
-AI_MODEL = "gemini-2.0-flash"
+AI_MODEL = "gemini-flash-latest"
 # Exact-origin allow-list (comma separated). Never use "*".
 ALLOWED_ORIGINS = "https://tomasloper266-svg.github.io,https://0clqu2zep3-4173.hosted.obvious.ai"
 

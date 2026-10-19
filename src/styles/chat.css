@@ -99,7 +99,7 @@
   transition: background var(--speed) ease;
 }
 .conversation-item.active {
-  background: var(--surface-2);
+  background: var(--accent-soft);
 }
 .conversation-item .conv-btn {
   flex: 1;
@@ -178,7 +178,7 @@ html[dir='rtl'] .conversation-item .conv-btn {
   padding: 10px clamp(12px, 3vw, 24px);
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg) 85%, transparent);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(12px);
   z-index: 2;
 }
 .chat-header .header-brand {
@@ -322,6 +322,7 @@ html[dir='rtl'] .conversation-item .conv-btn {
   line-height: 1.75;
   overflow-wrap: anywhere;
   min-width: 0;
+  box-shadow: var(--bubble-shadow);
 }
 .bubble.assistant {
   background: var(--surface);

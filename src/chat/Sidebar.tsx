@@ -1,4 +1,5 @@
 import { Brand } from '../components/ZunoLogo'
+import { IS_DEMO } from '../lib/engine'
 import type { Conversation } from '../types'
 import type { Strings } from '../i18n/strings'
 
@@ -57,7 +58,7 @@ export function Sidebar({
           )}
         </nav>
 
-        <div className="sidebar-footer">{t.footerNote}</div>
+        <div className="sidebar-footer">{IS_DEMO ? t.footerNote : t.footerNoteLive}</div>
       </div>
     </aside>
   )

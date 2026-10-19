@@ -191,6 +191,12 @@ export function Chat({
               {t.chat.demoBadge}
             </span>
           )}
+          {!IS_DEMO && (
+            <span className="live-badge" title={t.chat.liveNote}>
+              <span className="dot" />
+              {t.chat.liveBadge}
+            </span>
+          )}
           <Controls t={t} lang={lang} theme={theme} onToggleLang={onToggleLang} onToggleTheme={onToggleTheme} />
         </header>
 
@@ -234,7 +240,7 @@ export function Chat({
                   <span className="avatar assistant" aria-hidden="true">
                     <ZunoLogo size={20} />
                   </span>
-                  <div className="bubble assistant typing" aria-label={t.chat.demoBadge}>
+                  <div className="bubble assistant typing" aria-label={IS_DEMO ? t.chat.demoBadge : t.chat.liveBadge}>
                     <span />
                     <span />
                     <span />
@@ -247,6 +253,11 @@ export function Chat({
 
         <div className="composer-wrap">
           <Composer t={t} value={draft} onChange={setDraft} onSend={(v) => void send(v)} disabled={pending} />
+          {!IS_DEMO && (
+            <p className="privacy-note" dir="auto">
+              {t.chat.privacyNote}
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -220,6 +220,27 @@ html[dir='rtl'] .conversation-item .conv-btn {
   background: var(--accent-2);
 }
 
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 35%, transparent);
+  border-radius: 999px;
+  padding: 4px 11px;
+  cursor: help;
+  white-space: nowrap;
+}
+.live-badge .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ok);
+}
+
 /* ---------- Messages ---------- */
 .message-list {
   flex: 1;
@@ -556,6 +577,14 @@ html[dir='rtl'] .code-block-header {
 /* ---------- Composer ---------- */
 .composer-wrap {
   padding: 10px clamp(14px, 3vw, 24px) 16px;
+}
+.privacy-note {
+  max-width: 780px;
+  margin: 8px auto 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-faint);
+  text-align: center;
 }
 .composer {
   max-width: 780px;

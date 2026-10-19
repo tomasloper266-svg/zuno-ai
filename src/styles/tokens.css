@@ -60,6 +60,9 @@
   --accent-3-soft: rgba(109, 91, 208, 0.1);
   --on-accent: #ffffff;
 
+  --danger: #dc2626;
+  --ok: #0f9d6a;
+
   --shadow-1: 0 10px 30px rgba(16, 24, 40, 0.08);
   --shadow-2: 0 18px 44px rgba(16, 24, 40, 0.12);
   --bubble-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);

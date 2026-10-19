@@ -3,6 +3,7 @@ import type { FormEvent, ReactNode } from 'react'
 import { Brand } from '../components/ZunoLogo'
 import { Controls } from '../components/Controls'
 import { NodeField } from '../components/NodeField'
+import { IS_DEMO } from '../lib/engine'
 import type { Lang, Strings } from '../i18n/strings'
 import type { Theme } from '../App'
 
@@ -82,7 +83,7 @@ export function Home({ t, lang, theme, onToggleLang, onToggleTheme, onStart }: H
       </main>
 
       <footer className="home-footer">
-        {t.footerNote}
+        {IS_DEMO ? t.footerNote : t.footerNoteLive}
         <span className="sep">·</span>
         {t.version}
       </footer>

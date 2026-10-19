@@ -27,7 +27,9 @@
 
   --radius: 16px;
   --radius-sm: 10px;
+  --radius-lg: 20px;
   --shadow-1: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 18px 44px rgba(0, 0, 0, 0.45);
 
   --font-latin: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-arabic: 'IBM Plex Sans Arabic', 'Inter', ui-sans-serif, system-ui, sans-serif;
@@ -58,4 +60,5 @@
   --on-accent: #ffffff;
 
   --shadow-1: 0 10px 30px rgba(16, 24, 40, 0.08);
+  --shadow-2: 0 18px 44px rgba(16, 24, 40, 0.12);
 }

@@ -12,6 +12,7 @@ body,
 
 html {
   overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -43,6 +44,12 @@ button {
   background: none;
   border: none;
   padding: 0;
+  touch-action: manipulation; /* no double-tap-zoom delay on mobile */
+}
+
+h1,
+h2 {
+  text-wrap: balance;
 }
 
 :focus-visible {

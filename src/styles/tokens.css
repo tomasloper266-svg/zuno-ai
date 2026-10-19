@@ -1,0 +1,61 @@
+/*
+ * ZUNO AI — design tokens (single source of truth).
+ * Dark-first identity: deep graphite surfaces, restrained cyan/turquoise/violet accents.
+ */
+:root {
+  --bg: #0a0c10;
+  --bg-soft: #0e1116;
+  --surface: #131820;
+  --surface-2: #1a2130;
+  --border: #232c3d;
+  --border-strong: #2e3950;
+
+  --text: #e9edf4;
+  --text-dim: #9aa5b8;
+  --text-faint: #64708a;
+
+  --accent: #3ee0e6;        /* electric cyan */
+  --accent-2: #2fd4bd;      /* turquoise */
+  --accent-3: #8f7bf7;      /* violet */
+  --accent-soft: rgba(62, 224, 230, 0.12);
+  --accent-2-soft: rgba(47, 212, 189, 0.12);
+  --accent-3-soft: rgba(143, 123, 247, 0.14);
+  --on-accent: #06222a;
+
+  --danger: #f87171;
+  --ok: #34d399;
+
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow-1: 0 10px 30px rgba(0, 0, 0, 0.35);
+
+  --font-latin: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-arabic: 'IBM Plex Sans Arabic', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --speed: 180ms;
+  --sidebar-w: 268px;
+}
+
+[data-theme='light'] {
+  --bg: #f5f7fa;
+  --bg-soft: #eef1f6;
+  --surface: #ffffff;
+  --surface-2: #eff3f8;
+  --border: #dde3ec;
+  --border-strong: #c6cfdd;
+
+  --text: #10151d;
+  --text-dim: #4d5a6e;
+  --text-faint: #8593a8;
+
+  --accent: #0aa2b8;
+  --accent-2: #0d9488;
+  --accent-3: #6d5bd0;
+  --accent-soft: rgba(10, 162, 184, 0.1);
+  --accent-2-soft: rgba(13, 148, 136, 0.1);
+  --accent-3-soft: rgba(109, 91, 208, 0.1);
+  --on-accent: #ffffff;
+
+  --shadow-1: 0 10px 30px rgba(16, 24, 40, 0.08);
+}

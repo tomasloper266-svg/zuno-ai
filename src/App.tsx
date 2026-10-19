@@ -1,0 +1,93 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Home } from './views/Home'
+import { Chat } from './views/Chat'
+import { strings } from './i18n/strings'
+import type { Lang } from './i18n/strings'
+import { useLocalStorage } from './hooks/useLocalStorage'
+import type { Conversation } from './types'
+
+export type Theme = 'dark' | 'light'
+export type View = 'home' | 'chat'
+
+function defaultLang(): Lang {
+  try {
+    return navigator.language.toLowerCase().startsWith('ar') ? 'ar' : 'en'
+  } catch {
+    return 'en'
+  }
+}
+
+export default function App(): React.JSX.Element {
+  const [lang, setLang] = useLocalStorage<Lang>('zuno.lang', defaultLang())
+  const [theme, setTheme] = useLocalStorage<Theme>('zuno.theme', 'dark')
+  const [view, setView] = useState<View>('home')
+  const [conversations, setConversations] = useLocalStorage<Conversation[]>('zuno.conversations.v1', [])
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const [seedPrompt, setSeedPrompt] = useState('')
+
+  const t = strings[lang]
+  const active = useMemo(() => conversations.find((c) => c.id === activeId) ?? null, [conversations, activeId])
+
+  useEffect(() => {
+    document.documentElement.lang = lang
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr'
+  }, [lang])
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+  }, [theme])
+
+  const toggleLang = useCallback(() => setLang((prev) => (prev === 'en' ? 'ar' : 'en')), [setLang])
+  const toggleTheme = useCallback(() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark')), [setTheme])
+
+  const startChat = useCallback(
+    (prompt = '') => {
+      setSeedPrompt(prompt)
+      setActiveId(null)
+      setView('chat')
+    },
+    [],
+  )
+  const openChat = useCallback((id: string) => {
+    setActiveId(id)
+    setSeedPrompt('')
+    setView('chat')
+  }, [])
+  const newChat = useCallback(() => {
+    setActiveId(null)
+    setSeedPrompt('')
+  }, [])
+  const consumeSeed = useCallback(() => setSeedPrompt(''), [])
+  const goHome = useCallback(() => setView('home'), [])
+
+  if (view === 'home') {
+    return (
+      <Home
+        t={t}
+        lang={lang}
+        theme={theme}
+        onToggleLang={toggleLang}
+        onToggleTheme={toggleTheme}
+        onStart={startChat}
+      />
+    )
+  }
+
+  return (
+    <Chat
+      t={t}
+      lang={lang}
+      theme={theme}
+      onToggleLang={toggleLang}
+      onToggleTheme={toggleTheme}
+      conversation={active}
+      conversations={conversations}
+      setConversations={setConversations}
+      onSelect={openChat}
+      onNew={newChat}
+      onHome={goHome}
+      seedPrompt={seedPrompt}
+      onSeedConsumed={consumeSeed}
+    />
+  )
+}

@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+
+# Environment — never commit real credentials
+.env
+.env.*
+!.env.example
+
+# Editor & OS noise
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.local
+
+# Logs & coverage
+logs/
+*.log
+npm-debug.log*
+coverage/

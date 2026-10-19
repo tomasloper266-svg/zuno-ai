@@ -54,17 +54,21 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
   color: var(--on-accent);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
   font-weight: 600;
   font-size: 14px;
-  transition: filter var(--speed) ease, transform var(--speed) ease;
+  transition: filter var(--speed) ease, transform var(--speed) ease, box-shadow var(--speed) ease;
 }
 .new-chat-btn:hover {
   filter: brightness(1.06);
   transform: translateY(-1px);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.new-chat-btn:active {
+  transform: scale(0.97);
 }
 .new-chat-btn svg {
   width: 16px;
@@ -557,13 +561,15 @@ html[dir='rtl'] .code-block-header {
   margin: 0 auto;
   border: 1px solid var(--border-strong);
   background: var(--surface);
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   padding: 10px 10px 8px;
   transition: border-color var(--speed) ease, box-shadow var(--speed) ease;
 }
 .composer:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow:
+    0 0 0 3px var(--accent-soft),
+    var(--shadow-1);
 }
 .composer textarea {
   display: block;
@@ -594,19 +600,23 @@ html[dir='rtl'] .code-block-header {
   min-width: 0;
 }
 .composer-send {
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
-  background: var(--accent);
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
   color: var(--on-accent);
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  transition: filter var(--speed) ease, opacity var(--speed) ease, transform var(--speed) ease;
+  transition: filter var(--speed) ease, opacity var(--speed) ease, transform var(--speed) ease, box-shadow var(--speed) ease;
 }
 .composer-send:hover:not(:disabled) {
   filter: brightness(1.06);
   transform: translateY(-1px);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.composer-send:active:not(:disabled) {
+  transform: scale(0.95);
 }
 .composer-send:disabled {
   opacity: 0.45;

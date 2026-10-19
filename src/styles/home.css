@@ -189,7 +189,9 @@ html[dir='rtl'] .home-input {
 }
 .home-input:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow:
+    0 0 0 3px var(--accent-soft),
+    var(--shadow-1);
 }
 .home-input input {
   flex: 1;
@@ -207,16 +209,21 @@ html[dir='rtl'] .home-input {
   width: 42px;
   height: 42px;
   border-radius: 999px;
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
   color: var(--on-accent);
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  transition: transform var(--speed) ease, filter var(--speed) ease;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 30%, transparent);
+  transition: transform var(--speed) ease, filter var(--speed) ease, box-shadow var(--speed) ease;
 }
 .home-send:hover {
   transform: translateY(-1px);
   filter: brightness(1.06);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.home-send:active {
+  transform: scale(0.95);
 }
 .home-send svg {
   width: 18px;

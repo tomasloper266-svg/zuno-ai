@@ -5,13 +5,13 @@
 name = "zuno-ai-chat-proxy"
 main = "src/index.ts"
 compatibility_date = "2025-09-01"
+# Not a secret — identifies the Cloudflare account for deploy/remote operations.
+account_id = "6cc569dde80e9a464e33eb253ccb5b2f"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "zuno-chat-proxy"
-# PLACEHOLDER — replace with the real id from `wrangler d1 create zuno-chat-proxy`
-# before deploying (see README.md "Deployment").
-database_id = "00000000-0000-0000-0000-000000000000"
+database_name = "zuno-ratelimit"
+database_id = "1bc54b74-243a-4b1e-8fbe-31940d85f65d"
 
 [vars]
 # Provider selection: "gemini" (default) or "openai" (any OpenAI-compatible endpoint).
@@ -28,8 +28,8 @@ ALLOWED_ORIGINS = "http://localhost:5173"
 # Binding inheritance does not cross env boundaries — envs redeclare DB.
 [[env.dev.d1_databases]]
 binding = "DB"
-database_name = "zuno-chat-proxy"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_name = "zuno-ratelimit"
+database_id = "1bc54b74-243a-4b1e-8fbe-31940d85f65d"
 
 # Test environment for @cloudflare/vitest-pool-workers
 # (vitest.config.ts selects it via wrangler.environment). Fixture values only:
@@ -44,5 +44,5 @@ ALLOWED_ORIGINS = "https://app.example.test,https://other.example.test"
 
 [[env.test.d1_databases]]
 binding = "DB"
-database_name = "zuno-chat-proxy"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_name = "zuno-ratelimit"
+database_id = "1bc54b74-243a-4b1e-8fbe-31940d85f65d"

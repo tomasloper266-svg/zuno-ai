@@ -97,8 +97,9 @@ worker/
 - `AI_API_KEY` is the only secret. It is **never** in `wrangler.toml`, never in
   any committed file. Production: `wrangler secret put AI_API_KEY`. Local dev:
   copy `.dev.vars.example` → `.dev.vars` (git-ignored) and fill it in.
-- `wrangler.toml` holds only non-secret config. The D1 `database_id` is a
-  placeholder until you run `wrangler d1 create` (below).
+- `wrangler.toml` holds only non-secret config. The D1 `database_id` and
+  `account_id` are identifiers, not secrets; the D1 database `zuno-ratelimit`
+  was created at deploy time.
 
 ## Local development
 
@@ -127,7 +128,7 @@ npm run test        # vitest run (validator, rate limiter, adapters, CORS, contr
 ```bash
 cd worker
 npx wrangler login                          # one-time
-npx wrangler d1 create zuno-chat-proxy      # prints a database_id — paste it into wrangler.toml
+npx wrangler d1 create zuno-ratelimit       # prints a database_id — paste it into wrangler.toml
 npx wrangler d1 execute DB --remote --file=migrations/0001_rate_limits.sql
 npx wrangler secret put AI_API_KEY          # paste the Gemini API key when prompted
 npm run deploy                              # wrangler deploy

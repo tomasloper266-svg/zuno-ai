@@ -38,6 +38,8 @@ export interface Strings {
     liveBadge: string
     liveNote: string
     privacyNote: string
+    /** Shown in live mode when only the newest messages of a long conversation were sent. */
+    contextTrimmed: string
     emptyTitle: string
     emptyHint: string
     /** Seeded as the first message of every new conversation. */
@@ -103,6 +105,7 @@ export const strings: Record<Lang, Strings> = {
       liveBadge: 'Live AI',
       liveNote: 'Replies are generated live by Google Gemini through the ZUNO backend.',
       privacyNote: 'Privacy: ZUNO runs on Google Gemini’s free tier — Google may use prompts and responses to improve its products, and processing may involve human review. Please don’t send sensitive personal data.',
+      contextTrimmed: 'This conversation is long, so only the most recent 20 messages are sent to the AI — older context is not included.',
       emptyTitle: 'How can I help today?',
       emptyHint: 'Ask a question, or pick a starting point from the home screen.',
       greeting: "Hello! I'm ZUNO. How can I help you today?",
@@ -126,6 +129,10 @@ export const strings: Record<Lang, Strings> = {
         service: {
           title: 'Service unavailable',
           body: "ZUNO's AI service is temporarily unavailable. Please try again shortly.",
+        },
+        invalid: {
+          title: 'Invalid request',
+          body: 'The request was rejected as invalid — a message may be too long. Try shortening it or starting a new chat.',
         },
       },
       delete: 'Delete conversation',
@@ -182,6 +189,7 @@ export const strings: Record<Lang, Strings> = {
       liveBadge: 'ذكاء اصطناعي حي',
       liveNote: 'الردود مُولّدة مباشرة عبر Gemini من Google من خلال خلفية زونو.',
       privacyNote: 'الخصوصية: يعمل زونو على الخطة المجانية من Gemini — قد تستخدم Google الرسائل والردود لتحسين منتجاتها، وقد تشمل المعالجة مراجعة بشرية. يُرجى عدم إرسال بيانات شخصية حساسة.',
+      contextTrimmed: 'هذه المحادثة طويلة، لذا يُرسل إلى الذكاء الاصطناعي آخر 20 رسالة فقط — السياق الأقدم لا يُرسل.',
       emptyTitle: 'كيف أقدر أساعدك اليوم؟',
       emptyHint: 'اطرح سؤالك، أو اختر نقطة بداية من الصفحة الرئيسية.',
       greeting: 'مرحبًا! أنا زونو. كيف يمكنني مساعدتك اليوم؟',
@@ -205,6 +213,10 @@ export const strings: Record<Lang, Strings> = {
         service: {
           title: 'الخدمة غير متاحة',
           body: 'خدمة الذكاء الاصطناعي غير متاحة حالياً. يُرجى المحاولة بعد قليل.',
+        },
+        invalid: {
+          title: 'طلب غير صالح',
+          body: 'تم رفض الطلب لأنه غير صالح — قد تكون إحدى الرسائل أطول من الحد المسموح. جرّب اختصارها أو بدء محادثة جديدة.',
         },
       },
       delete: 'حذف المحادثة',

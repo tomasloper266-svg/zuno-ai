@@ -17,7 +17,23 @@ const API_BASE = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, '') ?? ''
 export const IS_DEMO = API_BASE === ''
 
 /** Why a chat request failed — drives which error banner the UI shows. */
-export type ChatErrorKind = 'connection' | 'too_fast' | 'daily_limit' | 'service'
+export type ChatErrorKind = 'connection' | 'too_fast' | 'daily_limit' | 'service' | 'invalid'
+
+/** How many of the newest thread messages ride on the wire to the chat API. */
+export const SENT_MESSAGE_LIMIT = 20
+
+/** The newest messages of a thread, in their original order — what a chat request
+ * carries. Pure, and request-time only: the stored conversation history keeps
+ * every message; trimming happens here, on the way out the door. */
+export function recentMessagesForRequest(thread: ThreadMessage[]): {
+  messages: ThreadMessage[]
+  trimmed: boolean
+} {
+  return {
+    messages: thread.slice(-SENT_MESSAGE_LIMIT),
+    trimmed: thread.length > SENT_MESSAGE_LIMIT,
+  }
+}
 
 /** A chat failure carrying the kind the banner UI keys on. */
 export class ChatRequestError extends Error {
@@ -44,7 +60,8 @@ async function readErrorCode(res: Response): Promise<string | null> {
   }
 }
 
-/** Map a non-OK response to the truthful failure kind: exhausted quota, burst limit, or service fault. */
+/** Map a non-OK response to the truthful failure kind: exhausted quota, burst limit,
+ * a rejected (invalid) request, or a service fault. */
 async function classifyFailure(res: Response): Promise<ChatRequestError> {
   const code = await readErrorCode(res)
   const retryAfter = Number.parseInt(res.headers.get('Retry-After') ?? '', 10)
@@ -55,6 +72,14 @@ async function classifyFailure(res: Response): Promise<ChatRequestError> {
     return new ChatRequestError(
       burstWindow ? 'too_fast' : 'daily_limit',
       `Chat API rate-limited the request (${detail})`,
+    )
+  }
+  // A 400 — with or without the Worker's { error: { code } } body — means the request
+  // itself was rejected (e.g. a message too long), not that the service is down.
+  if (code === 'invalid_request' || res.status === 400) {
+    return new ChatRequestError(
+      'invalid',
+      `Chat API rejected the request as invalid (status ${res.status}, code ${code ?? 'unknown'})`,
     )
   }
   return new ChatRequestError('service', `Chat API responded with status ${res.status} (code ${code ?? 'unknown'})`)

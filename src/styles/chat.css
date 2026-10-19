@@ -643,6 +643,15 @@ html[dir='rtl'] .code-block-header {
   color: var(--text-faint);
   text-align: center;
 }
+/* Muted notice: only the newest messages of a long conversation were sent. */
+.chat-context-note {
+  max-width: 780px;
+  margin: 0 auto 8px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-faint);
+  text-align: center;
+}
 .composer {
   max-width: 780px;
   margin: 0 auto;

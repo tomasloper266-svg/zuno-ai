@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { Conversation, Message } from '../types'
 import { uid } from '../lib/util'
-import { getAssistantReply, IS_DEMO, ChatRequestError } from '../lib/engine'
+import { getAssistantReply, recentMessagesForRequest, IS_DEMO, ChatRequestError } from '../lib/engine'
 import type { ChatErrorKind, ThreadMessage } from '../lib/engine'
 import { Sidebar } from '../chat/Sidebar'
 import { MessageBubble } from '../chat/MessageBubble'
@@ -48,6 +48,7 @@ export function Chat({
   )
   const [pending, setPending] = useState(false)
   const [errorKind, setErrorKind] = useState<ChatErrorKind | null>(null)
+  const [contextTrimmed, setContextTrimmed] = useState(false)
   const [draft, setDraft] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -93,6 +94,13 @@ export function Chat({
     }
   }, [activeConvId, messages.length, pending, errorKind])
 
+  // A trimmed-context notice describes one conversation's request, like an error
+  // banner does — switching conversations or starting a new chat clears both.
+  useEffect(() => {
+    setErrorKind(null)
+    setContextTrimmed(false)
+  }, [activeConvId])
+
   const NEAR_BOTTOM_PX = 120
 
   function handleListScroll(): void {
@@ -127,8 +135,12 @@ export function Chat({
   async function runAssistant(convId: string, thread: ThreadMessage[]): Promise<void> {
     setPending(true)
     setErrorKind(null)
+    // Request-time trim only: the stored history keeps every message — just the
+    // newest ones ride on the wire.
+    const { messages, trimmed } = recentMessagesForRequest(thread)
+    setContextTrimmed(trimmed)
     try {
-      const reply = await getAssistantReply(thread)
+      const reply = await getAssistantReply(messages)
       const assistantMessage: Message = {
         id: uid(),
         role: 'assistant',
@@ -227,6 +239,7 @@ export function Chat({
           onNew()
           setDraft('')
           setErrorKind(null)
+          setContextTrimmed(false)
           if (isMobile) setSidebarCollapsed(true)
         }}
         onDelete={(id) => setConversations((prev) => prev.filter((c) => c.id !== id))}
@@ -331,6 +344,11 @@ export function Chat({
               </svg>
               {t.chat.jumpToLatest}
             </button>
+          )}
+          {!IS_DEMO && contextTrimmed && (
+            <p className="chat-context-note" role="note" dir="auto">
+              {t.chat.contextTrimmed}
+            </p>
           )}
           <Composer t={t} value={draft} onChange={setDraft} onSend={(v) => void send(v)} disabled={pending} />
           {!IS_DEMO && (

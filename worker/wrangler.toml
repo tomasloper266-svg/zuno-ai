@@ -24,3 +24,25 @@ ALLOWED_ORIGINS = "https://tomasloper266-svg.github.io,https://0clqu2zep3-4173.h
 # the Vite dev server origin is allowed; secrets come from the git-ignored .dev.vars.
 [env.dev.vars]
 ALLOWED_ORIGINS = "http://localhost:5173"
+
+# Binding inheritance does not cross env boundaries — envs redeclare DB.
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "zuno-chat-proxy"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+# Test environment for @cloudflare/vitest-pool-workers
+# (vitest.config.ts selects it via wrangler.environment). Fixture values only:
+# the allow-list is fake, the base URL is a mocked host, and "test-key" is a
+# dummy placeholder — never a real credential. Not used by deploys.
+[env.test.vars]
+AI_PROVIDER = "gemini"
+AI_MODEL = "gemini-test"
+AI_API_KEY = "test-key"
+AI_BASE_URL = "https://gemini.mock.test"
+ALLOWED_ORIGINS = "https://app.example.test,https://other.example.test"
+
+[[env.test.d1_databases]]
+binding = "DB"
+database_name = "zuno-chat-proxy"
+database_id = "00000000-0000-0000-0000-000000000000"

@@ -609,9 +609,11 @@ describe('Pending reset on every end path — a conversation never stays stuck',
     fireEvent.click(screen.getByRole('button', { name: 'first' }))
     expect(screen.getByText('done reply')).not.toBeNull()
 
-    // Deleting the OTHER conversation works right after settle.
+    // Deleting the OTHER conversation works right after settle — through the
+    // confirmation dialog (a destructive tap is never one click).
     const deletes = screen.getAllByRole('button', { name: t.chat.delete })
     fireEvent.click(deletes[1] ?? document.body)
+    fireEvent.click(screen.getByRole('button', { name: t.chat.deleteConfirmAction }))
     expect(screen.queryByRole('button', { name: 'second' })).toBeNull()
     expect(contents(readState().find((c) => c.id === 'conv-1')?.messages ?? [])).toEqual(['hello', 'done reply'])
   })
@@ -707,5 +709,102 @@ describe('Pending reset on every end path — a conversation never stays stuck',
 
     fireEvent.click(screen.getByRole('button', { name: 'first' }))
     expect(screen.getByRole('button', { name: t.chat.retry })).not.toBeNull()
+  })
+})
+
+describe('Conversation deletion — confirmed, never silent (wave DE)', () => {
+  function twoConversations(): Conversation[] {
+    return [
+      { id: 'conv-1', title: 'first', createdAt: 1, titleProvisional: false, messages: [msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'first reply')] },
+      { id: 'conv-2', title: 'second', createdAt: 2, titleProvisional: false, messages: [msg('user', 'n1', 'other conversation')] },
+    ]
+  }
+
+  function deleteButtons(): HTMLElement[] {
+    return screen.getAllByRole('button', { name: t.chat.delete })
+  }
+
+  function confirmDeleteButton(): HTMLElement {
+    return screen.getByRole('button', { name: t.chat.deleteConfirmAction })
+  }
+
+  it('D1: the delete button alone never deletes — it opens the confirmation dialog', () => {
+    const readState = renderChat(twoConversations())
+
+    fireEvent.click(deleteButtons()[0] as HTMLElement)
+
+    expect(screen.getByRole('dialog', { name: t.chat.deleteConfirmTitle })).not.toBeNull()
+    // Nothing is gone: the destructive action waits for confirmation.
+    expect(readState()).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: 'first' })).not.toBeNull()
+    expect(screen.queryByRole('button', { name: 'second' })).not.toBeNull()
+  })
+
+  it('D2: confirming the dialog deletes the conversation permanently', () => {
+    const readState = renderChat(twoConversations())
+
+    fireEvent.click(deleteButtons()[1] as HTMLElement)
+    fireEvent.click(confirmDeleteButton())
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(readState().map((c) => c.id)).toEqual(['conv-1'])
+    expect(screen.queryByRole('button', { name: 'second' })).toBeNull()
+  })
+
+  it('D3: cancel (button or Escape) keeps both conversations and closes the dialog', () => {
+    const readState = renderChat(twoConversations())
+
+    fireEvent.click(deleteButtons()[0] as HTMLElement)
+    fireEvent.click(screen.getByRole('button', { name: t.chat.cancel }))
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(readState()).toHaveLength(2)
+
+    // The Escape path cancels too.
+    fireEvent.click(deleteButtons()[0] as HTMLElement)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(readState()).toHaveLength(2)
+  })
+
+  it('D4: deleting the streaming conversation aborts its stream cleanly — the guarded commit no-ops and nothing sticks', async () => {
+    const signals: AbortSignal[] = []
+    let release!: () => void
+    replyMock.mockImplementation(
+      (_thread: ThreadMessage[], onDelta: (t: string) => void, signal: AbortSignal) => {
+        signals.push(signal)
+        onDelta('streaming text,')
+        return new Promise<'completed' | 'aborted'>((resolve) => {
+          release = () => {
+            onDelta(' more')
+            resolve(signal.aborted ? 'aborted' : 'completed')
+          }
+          if (signal.aborted) resolve('aborted')
+          else signal.addEventListener('abort', () => resolve('aborted'), { once: true })
+        })
+      },
+    )
+    const readState = renderChat(twoConversations())
+
+    fireEvent.click(regenerateButton())
+    await waitFor(() => expect(signals).toHaveLength(1))
+
+    fireEvent.click(deleteButtons()[0] as HTMLElement)
+    fireEvent.click(confirmDeleteButton())
+
+    // The stream got a clean cancel — no exception, no stuck generating state.
+    expect(signals[0]?.aborted).toBe(true)
+    await waitFor(() => expect(screen.queryByRole('button', { name: t.chat.stopGenerating })).toBeNull())
+    expect(screen.queryByRole('alert')).toBeNull()
+
+    // The guarded commit no-ops: the deleted conversation is never resurrected.
+    expect(readState().map((c) => c.id)).toEqual(['conv-2'])
+    release()
+    expect(readState().map((c) => c.id)).toEqual(['conv-2'])
+
+    // The composer is fully usable again.
+    const composer = screen.getByRole('textbox', { name: t.chat.placeholder }) as HTMLTextAreaElement
+    fireEvent.change(composer, { target: { value: 'next message' } })
+    expect((screen.getByRole('button', { name: t.send }) as HTMLButtonElement).hasAttribute('disabled')).toBe(false)
   })
 })

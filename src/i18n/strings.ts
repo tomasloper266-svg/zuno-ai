@@ -69,6 +69,11 @@ export interface Strings {
     errors: Record<ChatErrorKind, BannerCopy>
     /** Shown instead of errors.connection when the browser reports being offline. */
     offline: BannerCopy
+    /** Delete confirmation dialog — a destructive action is never one click. */
+    cancel: string
+    deleteConfirmTitle: string
+    deleteConfirmBody: string
+    deleteConfirmAction: string
     delete: string
     you: string
     jumpToLatest: string
@@ -170,6 +175,10 @@ export const strings: Record<Lang, Strings> = {
         title: "You're offline",
         body: 'No internet connection right now. Your conversations stay saved on this device — reconnect to send messages to the AI.',
       },
+      cancel: 'Cancel',
+      deleteConfirmTitle: 'Delete this conversation permanently?',
+      deleteConfirmBody: 'The conversation and all its messages will be permanently removed from this browser. This cannot be undone.',
+      deleteConfirmAction: 'Delete permanently',
       delete: 'Delete conversation',
       you: 'You',
       jumpToLatest: 'Jump to latest',
@@ -269,6 +278,10 @@ export const strings: Record<Lang, Strings> = {
         title: 'أنت غير متصل',
         body: 'لا يوجد اتصال بالإنترنت الآن. تبقى محادثاتك محفوظة على هذا الجهاز — أعد الاتصال لإرسال الرسائل إلى الذكاء الاصطناعي.',
       },
+      cancel: 'إلغاء',
+      deleteConfirmTitle: 'حذف المحادثة نهائياً؟',
+      deleteConfirmBody: 'ستُحذف المحادثة وكل رسائلها نهائياً من هذا المتصفح، ولا يمكن التراجع عن ذلك.',
+      deleteConfirmAction: 'حذف نهائي',
       delete: 'حذف المحادثة',
       you: 'أنت',
       jumpToLatest: 'انتقل إلى الأحدث',

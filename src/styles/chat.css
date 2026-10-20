@@ -984,3 +984,67 @@ html[lang='ar'] .chat-empty p {
     max-width: 92%;
   }
 }
+
+/* ---------- Delete confirmation dialog ---------- */
+/* Viewport-fixed above every layer (mobile sidebar sits at z-index 40). */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: color-mix(in srgb, #000 45%, transparent);
+}
+
+.dialog-card {
+  width: min(380px, 100%);
+  display: grid;
+  gap: 6px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.35);
+}
+
+.dialog-card h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.dialog-card p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end; /* logical: inline-end in both RTL and LTR */
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.dialog-actions button {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  transition: background var(--speed) ease;
+}
+
+.dialog-actions button:hover {
+  background: var(--surface-2);
+}
+
+.dialog-actions button.danger {
+  border-color: transparent;
+  background: var(--danger);
+  color: #fff;
+}
+
+.dialog-actions button.danger:hover {
+  background: color-mix(in srgb, var(--danger) 85%, #000);
+}

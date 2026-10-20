@@ -9,6 +9,7 @@ import type { ChatErrorKind, ThreadMessage } from '../lib/engine'
 import { applyDerivedTitle } from '../lib/title'
 import { requestSmartTitle } from '../lib/smartTitle'
 import { Sidebar } from '../chat/Sidebar'
+import { ConfirmDeleteDialog } from '../chat/ConfirmDeleteDialog'
 import { MessageBubble } from '../chat/MessageBubble'
 import { ConversationActions } from '../chat/ConversationActions'
 import { Composer } from '../chat/Composer'
@@ -64,6 +65,11 @@ export function Chat({
   const [offlineAtError, setOfflineAtError] = useState(false)
   const [contextTrimmed, setContextTrimmed] = useState(false)
   const [draft, setDraft] = useState('')
+  // Pending delete awaiting confirmation — the id of the conversation the user
+  // asked to delete, or null when no dialog is open.
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
+  // The button that opened the delete dialog, so a cancel can return focus there.
+  const deleteOpenerRef = useRef<HTMLElement | null>(null)
   // The reply being streamed in: accumulated text plus the conversation it
   // belongs to, so the growing bubble only renders in its own conversation.
   const [streamText, setStreamText] = useState('')
@@ -182,6 +188,33 @@ export function Chat({
    * text already arrived is committed as the (partial) reply. */
   function stopGenerating(): void {
     abortRef.current?.abort()
+  }
+
+  /** Open the delete confirmation dialog for a conversation — never delete on
+   * the first click. The trigger button is remembered so a cancel returns
+   * focus to it. */
+  function requestDelete(id: string): void {
+    deleteOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setDeleteTargetId(id)
+  }
+
+  function closeDeleteDialog(): void {
+    setDeleteTargetId(null)
+    // Refocus the opener after a cancel; after a real delete the row (and its
+    // button) is gone, so the focus() call is a harmless no-op.
+    deleteOpenerRef.current?.focus()
+    deleteOpenerRef.current = null
+  }
+
+  function confirmDelete(): void {
+    const id = deleteTargetId
+    if (id === null) return
+    // Deleting the conversation that is currently streaming aborts its stream:
+    // a clean cancel — the engine resolves 'aborted' and the guarded commit
+    // no-ops against the removed id, leaving no stuck generating state.
+    if (id === streamingConvId) abortRef.current?.abort()
+    setConversations((prev) => prev.filter((c) => c.id !== id))
+    closeDeleteDialog()
   }
 
   function upsertConversation(convId: string, updater: (conv: Conversation) => Conversation): void {
@@ -429,7 +462,7 @@ export function Chat({
           setContextTrimmed(false)
           if (isMobile) setSidebarCollapsed(true)
         }}
-        onDelete={(id) => setConversations((prev) => prev.filter((c) => c.id !== id))}
+        onDelete={requestDelete}
         onHome={onHome}
       />
 
@@ -566,6 +599,8 @@ export function Chat({
           )}
         </div>
       </div>
+
+      {deleteTargetId !== null && <ConfirmDeleteDialog t={t} onConfirm={confirmDelete} onCancel={closeDeleteDialog} />}
     </div>
   )
 }

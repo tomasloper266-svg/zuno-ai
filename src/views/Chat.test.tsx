@@ -715,6 +715,42 @@ describe('Pending reset on every end path — a conversation never stays stuck',
     fireEvent.click(screen.getByRole('button', { name: 'first' }))
     expect(screen.getByRole('button', { name: t.chat.retry })).not.toBeNull()
   })
+
+  it('P7: switching conversations mid-stream shows nothing of the stream in the other view; the reply commits to its own conversation', async () => {
+    let release!: () => void
+    replyStreamPending(replyMock, (r) => {
+      release = r
+    }, 'secret stream text')
+    const readState = renderChat(twoConversations())
+
+    // The stream starts in conv-1 and stays pending while the reader leaves.
+    fireEvent.click(regenerateButton())
+    switchToSecond()
+
+    // The other conversation's view is clean: no streamed text and no
+    // per-conversation streaming bubble. (The composer's stop button is the
+    // global generating state — it truthfully says a stream is running and
+    // blocks a second concurrent send; it is not a leak into this view.)
+    expect(screen.queryByText('secret stream text')).toBeNull()
+    expect(
+      Array.from(document.querySelectorAll('.bubble.assistant')).some((el) => el.textContent === 'secret stream text'),
+    ).toBe(false)
+    expect(contents(readState().find((c) => c.id === 'conv-2')?.messages ?? [])).toEqual(['other conversation'])
+
+    // Completing commits to the streaming conversation only — the viewed one
+    // keeps exactly its own messages.
+    release()
+    await waitFor(() =>
+      expect(contents(readState().find((c) => c.id === 'conv-1')?.messages ?? [])).toEqual(['hello', 'secret stream text']),
+    )
+    expect(screen.queryByText('secret stream text')).toBeNull()
+    expect(contents(readState().find((c) => c.id === 'conv-2')?.messages ?? [])).toEqual(['other conversation'])
+
+    // Returning shows the committed reply with the streaming UI fully settled.
+    fireEvent.click(screen.getByRole('button', { name: 'first' }))
+    expect(screen.getByText('secret stream text')).not.toBeNull()
+    expect(screen.queryByRole('button', { name: t.chat.stopGenerating })).toBeNull()
+  })
 })
 
 describe('Conversation deletion — confirmed, never silent (wave DE)', () => {

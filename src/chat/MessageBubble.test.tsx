@@ -5,7 +5,7 @@
  * user messages and older assistant replies must never carry it.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MessageBubble } from './MessageBubble'
 import { strings } from '../i18n/strings'
 import type { Message } from '../types'
@@ -72,5 +72,35 @@ describe('MessageBubble stopped-state snapshot (stop button / watchdog)', () => 
       />,
     )
     expect(document.querySelector('.stopped-tag')?.textContent).toBe('موقوف')
+  })
+})
+
+describe('MessageBubble failed-state snapshot (salvaged mid-stream partial)', () => {
+  it('a failed reply carries the is-failed class, the Failed badge, and a per-message retry', () => {
+    const onRetry = vi.fn()
+    render(
+      <MessageBubble
+        message={{ ...msg('assistant', 'a1'), failed: true }}
+        t={t}
+        isLastAssistant
+        onRegenerate={() => {}}
+        onRetry={onRetry}
+      />,
+    )
+    expect(document.querySelector('.bubble.assistant')?.classList.contains('is-failed')).toBe(true)
+    expect(document.querySelector('.failed-tag')?.textContent).toBe(t.chat.failed)
+    fireEvent.click(screen.getByRole('button', { name: t.chat.retry }))
+    expect(onRetry).toHaveBeenCalledTimes(1)
+    // The per-message retry replaces Regenerate on a failed reply — one control.
+    expect(screen.queryByRole('button', { name: t.chat.regenerate })).toBeNull()
+  })
+
+  it('a normal reply never shows the failed badge or class, and keeps Regenerate', () => {
+    render(
+      <MessageBubble message={msg('assistant', 'a1')} t={t} isLastAssistant onRegenerate={() => {}} onRetry={() => {}} />,
+    )
+    expect(document.querySelector('.bubble.assistant')?.classList.contains('is-failed')).toBe(false)
+    expect(document.querySelector('.failed-tag')).toBeNull()
+    expect(screen.getByRole('button', { name: t.chat.regenerate })).toBeTruthy()
   })
 })

@@ -213,7 +213,7 @@ export function Chat({
       .map((m) => ({ role: m.role, content: m.content }))
   }
 
-  async function runAssistant(convId: string, thread: ThreadMessage[]): Promise<void> {
+  async function runAssistant(convId: string, thread: ThreadMessage[], replaceMessageId?: string): Promise<void> {
     // Check-and-set happens synchronously, before any await or state update —
     // the one-request invariant does not rely on React's flush timing.
     if (inFlightRef.current) return
@@ -248,9 +248,10 @@ export function Chat({
       if (text.length > 0) {
         // Completed, stopped midway, or watchdog-cancelled midway: the text the
         // reader saw is the text that gets committed — truthful in all three.
-        // Cut-short replies carry `stopped` so the bubble shows the badge.
+        // Cut-short replies carry `stopped` so the bubble shows the badge. A
+        // failed-message retry replaces it in place (same stable id).
         const assistantMessage: Message = {
-          id: uid(),
+          id: replaceMessageId ?? uid(),
           role: 'assistant',
           content: text,
           ts: Date.now(),
@@ -260,7 +261,12 @@ export function Chat({
         // One atomic state update: commit the reply AND swap the provisional
         // title for the heuristic one (no-op once the title is finalized).
         upsertConversation(convId, (conv) =>
-          applyDerivedTitle({ ...conv, messages: [...conv.messages, assistantMessage] }),
+          applyDerivedTitle({
+            ...conv,
+            messages: replaceMessageId
+              ? conv.messages.map((m) => (m.id === replaceMessageId ? assistantMessage : m))
+              : [...conv.messages, assistantMessage],
+          }),
         )
         if (isFirstReply) {
           // ChatGPT-style: generate the smart title from the first exchange
@@ -276,10 +282,33 @@ export function Chat({
         setErrorKind('service')
       }
     } catch (err) {
-      // Only genuine network failures carry kind 'connection' — every other path
-      // (quota, burst, service fault) is classified by the engine and told truthfully.
-      setErrorKind(err instanceof ChatRequestError ? err.kind : 'service')
-      setOfflineAtError(typeof navigator !== 'undefined' && !navigator.onLine)
+      if (text.length > 0) {
+        // Mid-stream failure with text already shown: the partial the reader
+        // saw is salvaged as a FAILED message — never lost. Its own badge and
+        // per-message retry replace the global banner; a zero-text failure
+        // keeps the banner (below).
+        const failedMessage: Message = {
+          id: replaceMessageId ?? uid(),
+          role: 'assistant',
+          content: text,
+          ts: Date.now(),
+          demo: IS_DEMO,
+          failed: true,
+        }
+        upsertConversation(convId, (conv) =>
+          applyDerivedTitle({
+            ...conv,
+            messages: replaceMessageId
+              ? conv.messages.map((m) => (m.id === replaceMessageId ? failedMessage : m))
+              : [...conv.messages, failedMessage],
+          }),
+        )
+      } else {
+        // Only genuine network failures carry kind 'connection' — every other path
+        // (quota, burst, service fault) is classified by the engine and told truthfully.
+        setErrorKind(err instanceof ChatRequestError ? err.kind : 'service')
+        setOfflineAtError(typeof navigator !== 'undefined' && !navigator.onLine)
+      }
     } finally {
       abortRef.current = null // released even on error, so retry stays usable
       inFlightRef.current = false
@@ -332,6 +361,15 @@ export function Chat({
   function retry(): void {
     if (conversation === null || pending || inFlightRef.current || conversation.messages.length === 0) return
     void runAssistant(conversation.id, toThread(conversation.messages))
+  }
+
+  /** Re-run a failed reply in place: same thread prefix, same message id — the
+   * salvaged partial is replaced, never duplicated. */
+  function retryFailedMessage(messageId: string): void {
+    if (conversation === null || pending || inFlightRef.current) return
+    const idx = conversation.messages.findIndex((m) => m.id === messageId)
+    if (idx === -1) return
+    void runAssistant(conversation.id, toThread(conversation.messages.slice(0, idx)), messageId)
   }
 
   function regenerate(): void {
@@ -447,6 +485,7 @@ export function Chat({
                   t={t}
                   isLastAssistant={message.role === 'assistant' && i === messages.length - 1 && !pending}
                   onRegenerate={regenerate}
+                  onRetry={() => retryFailedMessage(message.id)}
                 />
               ))}
               {bannerCopy !== null && (

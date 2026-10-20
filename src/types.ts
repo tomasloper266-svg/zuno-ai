@@ -17,6 +17,13 @@ export interface Message {
    * with a distinct visual state (see MessageBubble); absent on normal replies.
    */
   stopped?: boolean
+  /**
+   * True when this reply's stream FAILED midway and the partial text shown so
+   * far was salvaged instead of lost. Distinct from `stopped` (the user's or
+   * watchdog's intent) — it renders a Failed badge and its own retry, which
+   * re-runs the request replacing this message in place (same stable id).
+   */
+  failed?: boolean
 }
 
 export interface Conversation {

@@ -60,6 +60,8 @@ export interface Strings {
     stopGenerating: string
     /** Badge on a reply cut short by the stop button or the stall watchdog. */
     stopped: string
+    /** Badge on a reply whose stream failed midway — its partial text was salvaged. */
+    failed: string
     errors: Record<ChatErrorKind, BannerCopy>
     /** Shown instead of errors.connection when the browser reports being offline. */
     offline: BannerCopy
@@ -135,6 +137,7 @@ export const strings: Record<Lang, Strings> = {
       retry: 'Retry',
       stopGenerating: 'Stop generating',
       stopped: 'Stopped',
+      failed: 'Failed',
       errors: {
         connection: {
           title: 'Something went wrong',
@@ -231,6 +234,7 @@ export const strings: Record<Lang, Strings> = {
       retry: 'إعادة المحاولة',
       stopGenerating: 'إيقاف التوليد',
       stopped: 'موقوف',
+      failed: 'فشل',
       errors: {
         connection: {
           title: 'حدث خطأ ما',

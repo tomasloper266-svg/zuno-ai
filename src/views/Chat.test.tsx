@@ -382,6 +382,39 @@ describe('Chat streaming + stop behavior', () => {
     expect(screen.queryByRole('button', { name: t.chat.stopGenerating })).toBeNull()
   })
 
+  it('S4b: a mid-stream failure after partial text salvages the partial as a failed message with an in-place retry', async () => {
+    replyMock.mockImplementationOnce(async (_thread: ThreadMessage[], onDelta: (t: string) => void) => {
+      onDelta('salvaged partial,')
+      throw new ChatRequestError('service', 'stream failed midway')
+    })
+    streamReplyWith('recovered in place')
+    const readState = renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'old reply')]))
+
+    fireEvent.click(regenerateButton())
+
+    // The partial the reader saw is kept — committed as a FAILED message.
+    await waitFor(() => expect(contents(storedMessages(readState))).toEqual(['hello', 'salvaged partial,']))
+    const failed = storedMessages(readState)[1]
+    expect(failed?.failed).toBe(true)
+    // No global banner: the message itself carries the failure state and retry,
+    // which replace Regenerate on a failed reply.
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByRole('button', { name: t.chat.retry })).not.toBeNull()
+    expect(screen.queryByRole('button', { name: t.chat.regenerate })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: t.chat.retry }))
+
+    // Replaced IN PLACE: same stable message id, no duplicate, failure cleared,
+    // and the retry's thread carries only the prefix (never the partial itself).
+    await screen.findByText('recovered in place')
+    const messages = storedMessages(readState)
+    expect(contents(messages)).toEqual(['hello', 'recovered in place'])
+    expect(messages[1]?.id).toBe(failed?.id)
+    expect(messages[1]?.failed).toBeUndefined()
+    expect(replyMock).toHaveBeenCalledTimes(2)
+    expect(replyMock.mock.calls[1]?.[0]).toEqual([{ role: 'user', content: 'hello' }])
+  })
+
   it('S5: the stall watchdog auto-cancel commits the partial the reader saw, with no banner and a settled composer', async () => {
     replyMock.mockImplementation(async (_thread: ThreadMessage[], onDelta: (t: string) => void) => {
       onDelta('watchdog partial')

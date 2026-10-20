@@ -10,14 +10,19 @@ interface MessageBubbleProps {
   t: Strings
   isLastAssistant: boolean
   onRegenerate: () => void
+  /** Set for failed replies: re-runs this message in place (same stable id). */
+  onRetry?: () => void
 }
 
-export function MessageBubble({ message, t, isLastAssistant, onRegenerate }: MessageBubbleProps): React.JSX.Element {
+export function MessageBubble({ message, t, isLastAssistant, onRegenerate, onRetry }: MessageBubbleProps): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const isUser = message.role === 'user'
   // A reply the stop button or the stall watchdog cut short — always visually
   // distinct from a complete reply (badge + a calm edge), in both RTL and LTR.
   const isStopped = !isUser && message.stopped === true
+  // A reply whose stream failed midway — the partial text was salvaged, and the
+  // message carries its own retry instead of the global banner.
+  const isFailed = !isUser && message.failed === true
 
   async function handleCopy(): Promise<void> {
     if (await copyText(message.content)) {
@@ -35,11 +40,12 @@ export function MessageBubble({ message, t, isLastAssistant, onRegenerate }: Mes
         {/* is-latest marks the newest assistant reply — the CSS completion-pulse
             hook (zuno-complete). isLastAssistant is only true for assistant
             messages, so user bubbles never carry it. */}
-        <div className={`bubble ${message.role}${isLastAssistant ? ' is-latest' : ''}${isStopped ? ' is-stopped' : ''}`} dir="auto">
+        <div className={`bubble ${message.role}${isLastAssistant ? ' is-latest' : ''}${isStopped ? ' is-stopped' : ''}${isFailed ? ' is-failed' : ''}`} dir="auto">
           {isUser ? message.content : renderMarkdown(message.content)}
         </div>
         <div className="bubble-meta">
           {isStopped && <span className="stopped-tag">{t.chat.stopped}</span>}
+          {isFailed && <span className="failed-tag">{t.chat.failed}</span>}
           {!isUser && message.demo === true && <span className="demo-tag" title={t.chat.demoNote}>DEMO</span>}
           {!isUser && (
             <button
@@ -51,7 +57,12 @@ export function MessageBubble({ message, t, isLastAssistant, onRegenerate }: Mes
               {copied ? t.chat.copied : t.chat.copy}
             </button>
           )}
-          {!isUser && isLastAssistant && (
+          {!isUser && isLastAssistant && isFailed && onRetry && (
+            <button type="button" className="bubble-action" onClick={onRetry}>
+              {t.chat.retry}
+            </button>
+          )}
+          {!isUser && isLastAssistant && !isFailed && (
             <button type="button" className="bubble-action" onClick={onRegenerate}>
               {t.chat.regenerate}
             </button>

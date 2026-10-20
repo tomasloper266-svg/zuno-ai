@@ -31,6 +31,9 @@ export interface Strings {
     newChat: string
     history: string
     historyEmpty: string
+    searchPlaceholder: string
+    /** Empty state: conversations exist but none match the search query. */
+    searchNoResults: string
     placeholder: string
     hint: string
     demoBadge: string
@@ -100,6 +103,8 @@ export const strings: Record<Lang, Strings> = {
       newChat: 'New chat',
       history: 'History',
       historyEmpty: 'Your conversations will appear here — they are stored only in this browser.',
+      searchPlaceholder: 'Search conversations',
+      searchNoResults: 'No conversations match your search.',
       placeholder: 'Message ZUNO…',
       hint: 'Enter to send · Shift+Enter for a new line',
       demoBadge: 'Demo mode',
@@ -185,6 +190,8 @@ export const strings: Record<Lang, Strings> = {
       newChat: 'محادثة جديدة',
       history: 'السجل',
       historyEmpty: 'محادثاتك ستظهر هنا — وهي محفوظة في هذا المتصفح فقط.',
+      searchPlaceholder: 'ابحث في المحادثات',
+      searchNoResults: 'لا توجد محادثات مطابقة لبحثك.',
       placeholder: 'اكتب لزونو…',
       hint: 'Enter للإرسال · Shift+Enter لسطر جديد',
       demoBadge: 'وضع تجريبي',

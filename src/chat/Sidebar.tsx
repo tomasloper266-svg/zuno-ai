@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { Brand } from '../components/ZunoLogo'
 import { IS_DEMO } from '../lib/engine'
+import { filterConversations } from '../lib/search'
 import type { Conversation } from '../types'
 import type { Strings } from '../i18n/strings'
 
@@ -24,6 +26,9 @@ export function Sidebar({
   onDelete,
   onHome,
 }: SidebarProps): React.JSX.Element {
+  const [query, setQuery] = useState('')
+  const visible = filterConversations(conversations, query)
+
   return (
     <aside className={`chat-sidebar${collapsed ? ' collapsed' : ''}`} inert={collapsed}>
       <div className="sidebar-inner">
@@ -31,19 +36,44 @@ export function Sidebar({
           <Brand compact />
         </button>
 
-        <button type="button" className="new-chat-btn" onClick={onNew}>
+        <button
+          type="button"
+          className="new-chat-btn"
+          onClick={() => {
+            // A fresh conversation is empty — it can never match an active
+            // filter, so clear the query or the new chat would look "lost".
+            setQuery('')
+            onNew()
+          }}
+        >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
             <path d="M12 5v14M5 12h14" strokeLinecap="round" />
           </svg>
           {t.chat.newChat}
         </button>
 
+        <div className="sidebar-search">
+          <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M20 20l-3.5-3.5" strokeLinecap="round" />
+          </svg>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t.chat.searchPlaceholder}
+            aria-label={t.chat.searchPlaceholder}
+          />
+        </div>
+
         <span className="sidebar-label">{t.chat.history}</span>
         <nav className="conversation-list" aria-label={t.chat.history}>
           {conversations.length === 0 ? (
             <p className="sidebar-empty">{t.chat.historyEmpty}</p>
+          ) : visible.length === 0 ? (
+            <p className="sidebar-empty">{t.chat.searchNoResults}</p>
           ) : (
-            conversations.map((conv) => (
+            visible.map((conv) => (
               <div key={conv.id} className={`conversation-item${conv.id === activeId ? ' active' : ''}`}>
                 <button type="button" className="conv-btn" onClick={() => onSelect(conv.id)} title={conv.title}>
                   {conv.title}

@@ -95,6 +95,43 @@
   height: 16px;
 }
 
+.sidebar-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.sidebar-search .search-icon {
+  position: absolute;
+  inset-inline-start: 10px;
+  width: 14px;
+  height: 14px;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+.sidebar-search input {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding-block: 8px;
+  /* start side clears the magnifier icon; logical — flips with the layout */
+  padding-inline: 30px 12px;
+  font-size: 13px;
+  transition: border-color var(--speed) ease, box-shadow var(--speed) ease;
+}
+.sidebar-search input::placeholder {
+  color: var(--text-faint);
+}
+.sidebar-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.sidebar-search input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
 .sidebar-label {
   font-size: 11.5px;
   text-transform: uppercase;

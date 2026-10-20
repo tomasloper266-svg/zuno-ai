@@ -97,4 +97,17 @@ describe('PWA manifest', () => {
     // would 404 under the /zuno-ai/ subpath.
     expect(html).not.toContain('href="/manifest.webmanifest"')
   })
+
+  it('declares launcher shortcuts wired to the app deep-link actions', () => {
+    // The URLs must stay relative (they resolve against the manifest URL, so
+    // they work under the Pages subpath) and must carry the exact `action`
+    // parameters App.tsx consumes at load.
+    expect(manifest.shortcuts?.map((s) => s.url)).toEqual(['./?action=new-chat', './?action=search'])
+    for (const shortcut of manifest.shortcuts ?? []) {
+      expect(shortcut.name.trim().length).toBeGreaterThan(0)
+      expect(shortcut.short_name.trim().length).toBeGreaterThan(0)
+      expect(shortcut.url.startsWith('./')).toBe(true)
+      expect(shortcut.icons?.every((icon) => icon.src.startsWith('./icons/'))).toBe(true)
+    }
+  })
 })

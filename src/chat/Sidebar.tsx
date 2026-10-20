@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Brand } from '../components/ZunoLogo'
 import { IS_DEMO } from '../lib/engine'
 import { filterConversations } from '../lib/search'
@@ -14,6 +14,10 @@ interface SidebarProps {
   onNew: () => void
   onDelete: (id: string) => void
   onHome: () => void
+  /** One-shot from the launcher deep link (?action=search): focus the search field. */
+  autoFocusSearch?: boolean
+  /** Acknowledge the focus request so the intent is consumed exactly once. */
+  onSearchFocused?: () => void
 }
 
 export function Sidebar({
@@ -25,9 +29,18 @@ export function Sidebar({
   onNew,
   onDelete,
   onHome,
+  autoFocusSearch = false,
+  onSearchFocused = () => {},
 }: SidebarProps): React.JSX.Element {
   const [query, setQuery] = useState('')
+  const searchRef = useRef<HTMLInputElement>(null)
   const visible = filterConversations(conversations, query)
+
+  useEffect(() => {
+    if (!autoFocusSearch) return
+    searchRef.current?.focus()
+    onSearchFocused()
+  }, [autoFocusSearch, onSearchFocused])
 
   return (
     <aside className={`chat-sidebar${collapsed ? ' collapsed' : ''}`} inert={collapsed}>
@@ -58,6 +71,7 @@ export function Sidebar({
             <path d="M20 20l-3.5-3.5" strokeLinecap="round" />
           </svg>
           <input
+            ref={searchRef}
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}

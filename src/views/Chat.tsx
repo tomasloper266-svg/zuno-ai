@@ -29,6 +29,10 @@ interface ChatProps {
   onHome: () => void
   seedPrompt: string
   onSeedConsumed: () => void
+  /** One-shot launcher deep link (?action=search): focus the sidebar search. */
+  searchFocusPending?: boolean
+  /** Acknowledge the focus request (consumed by the Sidebar). */
+  onSearchFocused?: () => void
 }
 
 export function Chat({
@@ -45,6 +49,8 @@ export function Chat({
   onHome,
   seedPrompt,
   onSeedConsumed,
+  searchFocusPending = false,
+  onSearchFocused = () => {},
 }: ChatProps): React.JSX.Element {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() =>
     typeof window !== 'undefined' ? window.innerWidth <= 820 : false,
@@ -127,6 +133,12 @@ export function Chat({
     setOfflineAtError(false)
     setContextTrimmed(false)
   }, [activeConvId])
+
+  // The search deep link must reach a visible sidebar: on a narrow screen the
+  // sidebar mounts collapsed, so expand it before the focus lands.
+  useEffect(() => {
+    if (searchFocusPending) setSidebarCollapsed(false)
+  }, [searchFocusPending])
 
   const NEAR_BOTTOM_PX = 120
 
@@ -304,6 +316,8 @@ export function Chat({
         conversations={conversations}
         activeId={conversation?.id ?? null}
         collapsed={sidebarCollapsed}
+        autoFocusSearch={searchFocusPending}
+        onSearchFocused={onSearchFocused}
         onSelect={(id) => {
           onSelect(id)
           if (isMobile) setSidebarCollapsed(true)

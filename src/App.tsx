@@ -4,6 +4,7 @@ import { Chat } from './views/Chat'
 import { strings } from './i18n/strings'
 import type { Lang } from './i18n/strings'
 import { useLocalStorage } from './hooks/useLocalStorage'
+import { parseLaunchAction, stripLaunchAction } from './pwa/launchIntent'
 import type { Conversation } from './types'
 
 export type Theme = 'dark' | 'light'
@@ -24,6 +25,8 @@ export default function App(): React.JSX.Element {
   const [conversations, setConversations] = useLocalStorage<Conversation[]>('zuno.conversations.v1', [])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [seedPrompt, setSeedPrompt] = useState('')
+  // One-shot flag behind the launcher search deep link (?action=search).
+  const [searchFocusPending, setSearchFocusPending] = useState(false)
 
   const t = strings[lang]
   const active = useMemo(() => conversations.find((c) => c.id === activeId) ?? null, [conversations, activeId])
@@ -60,6 +63,27 @@ export default function App(): React.JSX.Element {
   const consumeSeed = useCallback(() => setSeedPrompt(''), [])
   const goHome = useCallback(() => setView('home'), [])
 
+  const onSearchFocused = useCallback(() => setSearchFocusPending(false), [])
+
+  // Launcher deep links (PWA shortcuts): execute once at mount, then strip the
+  // parameter from the URL so a reload or a shared link never re-triggers it.
+  useEffect(() => {
+    const action = parseLaunchAction(window.location.search)
+    if (action === null) return
+    window.history.replaceState(null, '', stripLaunchAction(window.location.href))
+    if (action.kind === 'new-chat') {
+      startChat()
+      return
+    }
+    // Search: the conversation list only exists in the chat view — open the
+    // most recent conversation (or a fresh one) with the search field focused.
+    if (conversations.length > 0) openChat(conversations[0].id)
+    else startChat()
+    setSearchFocusPending(true)
+    // Mount-only by design: a deep link is a launch-time instruction.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   if (view === 'home') {
     return (
       <Home
@@ -88,6 +112,8 @@ export default function App(): React.JSX.Element {
       onHome={goHome}
       seedPrompt={seedPrompt}
       onSeedConsumed={consumeSeed}
+      searchFocusPending={searchFocusPending}
+      onSearchFocused={onSearchFocused}
     />
   )
 }

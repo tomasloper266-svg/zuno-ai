@@ -34,5 +34,21 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "New chat — محادثة جديدة",
+      "short_name": "New / جديدة",
+      "description": "Start a new ZUNO conversation — ابدأ محادثة جديدة مع زونو",
+      "url": "./?action=new-chat",
+      "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Search — بحث",
+      "short_name": "Search / بحث",
+      "description": "Search your conversations — ابحث في محادثاتك",
+      "url": "./?action=search",
+      "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
   ]
 }

@@ -30,8 +30,8 @@
 
   // src/sw/sw.ts
   var sw = self;
-  var ASSET_CACHE = `zuno-assets-${"vmvgq9fak"}`;
-  var PAGE_CACHE = `zuno-pages-${"vmvgq9fak"}`;
+  var ASSET_CACHE = `zuno-assets-${"vmvgqk3u4"}`;
+  var PAGE_CACHE = `zuno-pages-${"vmvgqk3u4"}`;
   var OWNED_CACHES = [ASSET_CACHE, PAGE_CACHE];
   sw.addEventListener("activate", (event) => {
     event.waitUntil(

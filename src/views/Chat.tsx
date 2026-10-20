@@ -386,7 +386,7 @@ export function Chat({
                   <span className="avatar assistant" aria-hidden="true">
                     <ZunoLogo size={20} />
                   </span>
-                  <div className="bubble assistant" dir="auto">
+                  <div className="bubble assistant" dir="auto" aria-label={IS_DEMO ? t.chat.demoBadge : t.chat.liveBadge}>
                     {renderMarkdown(streamText)}
                   </div>
                 </div>

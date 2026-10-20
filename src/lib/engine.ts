@@ -54,6 +54,28 @@ const BURST_RETRY_AFTER_MAX_SECONDS = 120
 /** How a streamed reply ended: normally, or cut short by the caller's abort. */
 export type StreamOutcome = 'completed' | 'aborted'
 
+/** Pause between demo-stream chunks — tuned to feel like live token arrival. */
+const DEMO_CHUNK_DELAY_MS = 55
+/** A demo chunk never exceeds this many characters (long words split into runs). */
+const DEMO_CHUNK_MAX_CHARS = 14
+
+/**
+ * Split a scripted demo reply into small streaming chunks that feel like live
+ * token arrival: split on word boundaries with whitespace kept attached to the
+ * preceding word, then split oversized words (URLs, code tokens) into runs.
+ * Chunks always concatenate back to the original text, character for character.
+ */
+export function chunkDemoReply(reply: string): string[] {
+  const words = reply.match(/\S+\s*/g) ?? [reply]
+  const chunks: string[] = []
+  for (const word of words) {
+    for (let i = 0; i < word.length; i += DEMO_CHUNK_MAX_CHARS) {
+      chunks.push(word.slice(i, i + DEMO_CHUNK_MAX_CHARS))
+    }
+  }
+  return chunks
+}
+
 /** Worker error bodies are always { error: { code } } — tolerate anything else (an intermediary may serve a non-JSON error page). */
 async function readErrorCode(res: Response): Promise<string | null> {
   try {
@@ -206,11 +228,17 @@ export async function streamAssistantReply(
     throw new ChatRequestError('service', 'Chat stream closed before the reply finished')
   }
 
-  // Demo mode: a short human-feeling pause, then the scripted reply in one piece.
+  // Demo mode: a short human-feeling pause, then the scripted reply paced out
+  // chunk by chunk — the streaming UX matches live mode exactly. The text is
+  // still the scripted demo reply and stays badged as demo in the UI.
   await new Promise((resolve) => setTimeout(resolve, 650 + Math.random() * 550))
   if (signal.aborted) return 'aborted'
   const lastUser = [...thread].reverse().find((m) => m.role === 'user')?.content ?? ''
-  onDelta(demoReply(lastUser))
+  for (const chunk of chunkDemoReply(demoReply(lastUser))) {
+    if (signal.aborted) return 'aborted'
+    onDelta(chunk)
+    await new Promise((resolve) => setTimeout(resolve, DEMO_CHUNK_DELAY_MS))
+  }
   return 'completed'
 }
 

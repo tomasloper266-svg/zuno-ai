@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { Conversation, Message } from '../types'
 import { uid } from '../lib/util'
+import { useReducedMotion } from '../hooks/useReducedMotion'
 import { renderMarkdown } from '../lib/markdown'
 import { recentMessagesForRequest, IS_DEMO, SENT_MESSAGE_LIMIT, streamAssistantReply, ChatRequestError } from '../lib/engine'
 import { MAX_MESSAGE_CHARS } from '../lib/limits'
@@ -77,6 +78,10 @@ export function Chat({
   const [streamText, setStreamText] = useState('')
   const [streamingConvId, setStreamingConvId] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  // Collapses smooth scrolling (the jump-to-latest pill) into instant jumps
+  // when the OS prefers reduced motion. Read once per mount; the hook keeps
+  // it live via the media query's change event.
+  const reducedMotion = useReducedMotion()
   // AbortController of the in-flight stream — the stop button's handle.
   const abortRef = useRef<AbortController | null>(null)
   // Synchronous in-flight guard shared by send/retry/regenerate — a plain ref,
@@ -231,7 +236,8 @@ export function Chat({
 
   function jumpToLatest(): void {
     const el = listRef.current
-    if (el !== null) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    // Reduced motion collapses the animation into an instant jump.
+    if (el !== null) el.scrollTo({ top: el.scrollHeight, behavior: reducedMotion ? 'auto' : 'smooth' })
     atBottomRef.current = true
     setAtBottom(true)
     setNewBelow(false)

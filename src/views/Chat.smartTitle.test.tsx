@@ -36,6 +36,20 @@ function streamReplyWith(text: string): void {
   })
 }
 
+// jsdom has no matchMedia; useReducedMotion only needs a static query result.
+if (typeof window.matchMedia !== 'function') {
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia
+}
+
 // Chat's auto-follow effect calls el.scrollTo(...) — jsdom does not implement
 // element scrolling, so provide a no-op when it is missing.
 if (typeof Element !== 'undefined' && typeof Element.prototype.scrollTo !== 'function') {

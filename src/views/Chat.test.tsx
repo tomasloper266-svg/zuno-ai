@@ -65,6 +65,25 @@ if (typeof Element !== 'undefined' && typeof Element.prototype.scrollTo !== 'fun
   Element.prototype.scrollTo = function scrollTo(): void {}
 }
 
+// jsdom has no matchMedia; useReducedMotion only needs a static query result.
+// The `reducedMotion` flag lets individual tests flip the OS preference — set
+// it BEFORE rendering (the hook reads the query once for its initial value).
+let reducedMotion = false
+if (typeof window.matchMedia !== 'function') {
+  window.matchMedia = ((query: string) => ({
+    get matches() {
+      return reducedMotion
+    },
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia
+}
+
 function msg(role: Message['role'], id: string, content: string): Message {
   return { id, role, content, ts: 1_700_000_000_000 }
 }
@@ -1129,5 +1148,82 @@ describe('In-app keyboard shortcuts (wave FG)', () => {
     expect(screen.queryByRole('dialog', { name: t.chat.shortcuts.title })).toBeNull()
     // Focus returns to the kebab button that opened the panel.
     expect(document.activeElement).toBe(kebab)
+  })
+})
+
+describe('Reduced motion in scrolling (wave FG)', () => {
+  /** Capture the scroll options Chat asks for — the polyfilled no-op scrolls
+   * nowhere, but the requested behavior ('auto' vs 'smooth') is the contract. */
+  function spyScrollTo(): { calls: ScrollToOptions[]; restore: () => void } {
+    const calls: ScrollToOptions[] = []
+    const original = Element.prototype.scrollTo
+    Element.prototype.scrollTo = function capture(...args: unknown[]): void {
+      const options = args[0]
+      if (typeof options === 'object' && options !== null) calls.push(options as ScrollToOptions)
+    }
+    return { calls, restore: () => { Element.prototype.scrollTo = original } }
+  }
+
+  /** jsdom reports all-zero scroll metrics (always "at the bottom"); fake a
+   * scrolled-up reader so the jump-to-latest pill can appear during a stream. */
+  function fakeScrolledUp(list: Element): void {
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, get: () => 2000 })
+    Object.defineProperty(list, 'clientHeight', { configurable: true, get: () => 500 })
+    Object.defineProperty(list, 'scrollTop', { configurable: true, value: 0 })
+  }
+
+  afterEach(() => {
+    reducedMotion = false
+  })
+
+  it('reduced motion: the jump-to-latest pill collapses to an instant jump', async () => {
+    reducedMotion = true
+    const spy = spyScrollTo()
+    try {
+      let release: () => void = () => {}
+      replyStreamPending(replyMock, (r) => { release = r }, 'late text')
+      renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'old reply')]))
+
+      fireEvent.click(regenerateButton())
+      const list = document.querySelector('.message-list') as Element
+      fakeScrolledUp(list)
+      fireEvent.scroll(list)
+
+      const pill = await screen.findByRole('button', { name: t.chat.jumpToLatest })
+      fireEvent.click(pill)
+
+      const behaviorCalls = spy.calls.filter((c) => c.behavior !== undefined)
+      expect(behaviorCalls).toEqual([{ top: 2000, behavior: 'auto' }])
+
+      release()
+      await screen.findByText('late text')
+    } finally {
+      spy.restore()
+    }
+  })
+
+  it('no preference: the jump-to-latest pill keeps its smooth scroll', async () => {
+    const spy = spyScrollTo()
+    try {
+      let release: () => void = () => {}
+      replyStreamPending(replyMock, (r) => { release = r }, 'late text')
+      renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'old reply')]))
+
+      fireEvent.click(regenerateButton())
+      const list = document.querySelector('.message-list') as Element
+      fakeScrolledUp(list)
+      fireEvent.scroll(list)
+
+      const pill = await screen.findByRole('button', { name: t.chat.jumpToLatest })
+      fireEvent.click(pill)
+
+      const behaviorCalls = spy.calls.filter((c) => c.behavior !== undefined)
+      expect(behaviorCalls).toEqual([{ top: 2000, behavior: 'smooth' }])
+
+      release()
+      await screen.findByText('late text')
+    } finally {
+      spy.restore()
+    }
   })
 })

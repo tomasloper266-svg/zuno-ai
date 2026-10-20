@@ -4,8 +4,8 @@ import { Chat } from './views/Chat'
 import { strings } from './i18n/strings'
 import type { Lang } from './i18n/strings'
 import { useLocalStorage } from './hooks/useLocalStorage'
+import { useConversations } from './hooks/useConversations'
 import { parseLaunchAction, stripLaunchAction } from './pwa/launchIntent'
-import type { Conversation } from './types'
 
 export type Theme = 'dark' | 'light'
 export type View = 'home' | 'chat'
@@ -22,7 +22,10 @@ export default function App(): React.JSX.Element {
   const [lang, setLang] = useLocalStorage<Lang>('zuno.lang', defaultLang())
   const [theme, setTheme] = useLocalStorage<Theme>('zuno.theme', 'dark')
   const [view, setView] = useState<View>('home')
-  const [conversations, setConversations] = useLocalStorage<Conversation[]>('zuno.conversations.v1', [])
+  // Versioned, corruption-tolerant persistence (quarantine on bad JSON,
+  // v1→v2 migration, no silent data loss on quota) + a gentle save-failure
+  // notice rendered as a banner below.
+  const [conversations, setConversations, storageNotice] = useConversations()
   const [activeId, setActiveId] = useState<string | null>(null)
   const [seedPrompt, setSeedPrompt] = useState('')
   // One-shot flag behind the launcher search deep link (?action=search).
@@ -98,22 +101,29 @@ export default function App(): React.JSX.Element {
   }
 
   return (
-    <Chat
-      t={t}
-      lang={lang}
-      theme={theme}
-      onToggleLang={toggleLang}
-      onToggleTheme={toggleTheme}
-      conversation={active}
-      conversations={conversations}
-      setConversations={setConversations}
-      onSelect={openChat}
-      onNew={newChat}
-      onHome={goHome}
-      seedPrompt={seedPrompt}
-      onSeedConsumed={consumeSeed}
-      searchFocusPending={searchFocusPending}
-      onSearchFocused={onSearchFocused}
-    />
+    <>
+      {storageNotice !== null && (
+        <div className="storage-notice" role="status">
+          {t.storageNotice}
+        </div>
+      )}
+      <Chat
+        t={t}
+        lang={lang}
+        theme={theme}
+        onToggleLang={toggleLang}
+        onToggleTheme={toggleTheme}
+        conversation={active}
+        conversations={conversations}
+        setConversations={setConversations}
+        onSelect={openChat}
+        onNew={newChat}
+        onHome={goHome}
+        seedPrompt={seedPrompt}
+        onSeedConsumed={consumeSeed}
+        searchFocusPending={searchFocusPending}
+        onSearchFocused={onSearchFocused}
+      />
+    </>
   )
 }

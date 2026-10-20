@@ -116,9 +116,15 @@ describe('Conversation rename persistence (wave DE)', () => {
     render(<App />)
     expect(screen.getByRole('button', { name: 'اسمي الخاص' })).toBeTruthy()
 
-    // The stored payload carries the manual pin so the smart title stands down.
-    const stored = JSON.parse(window.localStorage.getItem('zuno.conversations.v1') ?? '[]') as Conversation[]
-    expect(stored[0]?.title).toBe('اسمي الخاص')
-    expect(stored[0]?.titleManual).toBe(true)
+    // The stored payload is the versioned v2 envelope (migrated from the
+    // legacy seeded array) and carries the manual pin so the smart title
+    // stands down.
+    const envelope = JSON.parse(window.localStorage.getItem('zuno.conversations.v1') ?? 'null') as {
+      schemaVersion: number
+      conversations: Conversation[]
+    }
+    expect(envelope.schemaVersion).toBe(2)
+    expect(envelope.conversations[0]?.title).toBe('اسمي الخاص')
+    expect(envelope.conversations[0]?.titleManual).toBe(true)
   })
 })

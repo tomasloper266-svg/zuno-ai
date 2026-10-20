@@ -1,0 +1,51 @@
+name: deploy
+
+# Publish to GitHub Pages (legacy gh-pages branch source) after a full
+# green gate. Every push to main that passes typecheck, lint, tests and
+# build goes live at the Pages URL automatically.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+# Never publish on top of a still-running publish; queue instead of cancel.
+concurrency:
+  group: gh-pages-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install worker dependencies
+        run: npm ci --prefix worker --no-audit --no-fund
+
+      - name: Full gate before publishing
+        run: |
+          npm run typecheck
+          npm run lint
+          npm test
+          npm test --prefix worker
+          npm run build
+
+      - name: Publish dist to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages

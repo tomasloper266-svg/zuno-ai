@@ -113,6 +113,20 @@ describe('getAssistantReply', () => {
     stubFetch(500, JSON.stringify({ error: { code: 'internal_error' } }))
     await expect(errorKindOf(() => getAssistantReply(threadOf(3)))).resolves.toBe('service')
   })
+
+  it('classifies a 403 as a blocked origin — access denial, not a service fault', async () => {
+    // The Worker sends disallowed origins as status 403 with code
+    // 'invalid_request', so the status must win over the code here.
+    stubFetch(403, JSON.stringify({ error: { code: 'invalid_request' } }), {
+      'Content-Type': 'application/json',
+    })
+    await expect(errorKindOf(() => getAssistantReply(threadOf(3)))).resolves.toBe('blocked_origin')
+  })
+
+  it('classifies a 401 a service-side credential failure (service, unchanged)', async () => {
+    stubFetch(401, JSON.stringify({ error: { code: 'unauthorized' } }))
+    await expect(errorKindOf(() => getAssistantReply(threadOf(3)))).resolves.toBe('service')
+  })
 })
 
 function sseBody(...events: Array<{ event: string; data: unknown }>): string {

@@ -199,6 +199,10 @@ export const strings: Record<Lang, Strings> = {
           title: 'Invalid request',
           body: 'The request was rejected as invalid — a message may be too long. Try shortening it or starting a new chat.',
         },
+        blocked_origin: {
+          title: 'Access denied',
+          body: 'Access from this origin is not allowed.',
+        },
       },
       offline: {
         title: "You're offline",
@@ -316,6 +320,10 @@ export const strings: Record<Lang, Strings> = {
         invalid: {
           title: 'طلب غير صالح',
           body: 'تم رفض الطلب لأنه غير صالح — قد تكون إحدى الرسائل أطول من الحد المسموح. جرّب اختصارها أو بدء محادثة جديدة.',
+        },
+        blocked_origin: {
+          title: 'تم رفض الوصول',
+          body: 'الوصول من هذا المصدر غير مسموح.',
         },
       },
       offline: {

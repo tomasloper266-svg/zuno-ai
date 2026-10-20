@@ -1227,3 +1227,35 @@ describe('Reduced motion in scrolling (wave FG)', () => {
     }
   })
 })
+
+describe('Precise 403 banner — blocked origin (wave FG, audit gap H)', () => {
+  it('a 403 blocked-origin failure shows the precise access-denied banner, not «Service unavailable»', async () => {
+    replyMock.mockRejectedValueOnce(
+      new ChatRequestError('blocked_origin', 'Chat API denied access from this origin (status 403)'),
+    )
+    renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'old reply')]))
+
+    fireEvent.click(regenerateButton())
+    const banner = await screen.findByRole('alert')
+    expect(banner.textContent).toContain('Access denied')
+    expect(banner.textContent).toContain('Access from this origin is not allowed.')
+    expect(banner.textContent).not.toContain('Service unavailable')
+  })
+
+  it('a 401 failure keeps the service banner — its correct message is unchanged', async () => {
+    replyMock.mockRejectedValueOnce(new ChatRequestError('service', 'Chat API responded with status 401'))
+    renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'old reply')]))
+
+    fireEvent.click(regenerateButton())
+    const banner = await screen.findByRole('alert')
+    expect(banner.textContent).toContain('Service unavailable')
+    expect(banner.textContent).not.toContain('Access from this origin is not allowed.')
+  })
+
+  it('the blocked-origin banner copy is pinned bilingually', () => {
+    expect(strings.en.chat.errors.blocked_origin.title).toBe('Access denied')
+    expect(strings.en.chat.errors.blocked_origin.body).toBe('Access from this origin is not allowed.')
+    expect(strings.ar.chat.errors.blocked_origin.title).toBe('تم رفض الوصول')
+    expect(strings.ar.chat.errors.blocked_origin.body).toBe('الوصول من هذا المصدر غير مسموح.')
+  })
+})

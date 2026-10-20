@@ -21,7 +21,7 @@ export const API_BASE = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, '')
 export const IS_DEMO = API_BASE === ''
 
 /** Why a chat request failed — drives which error banner the UI shows. */
-export type ChatErrorKind = 'connection' | 'too_fast' | 'daily_limit' | 'service' | 'invalid'
+export type ChatErrorKind = 'connection' | 'too_fast' | 'daily_limit' | 'service' | 'invalid' | 'blocked_origin'
 
 /** How many of the newest thread messages ride on the wire to the chat API. */
 export const SENT_MESSAGE_LIMIT = 20
@@ -113,6 +113,16 @@ async function classifyFailure(res: Response): Promise<ChatRequestError> {
     return new ChatRequestError(
       burstWindow ? 'too_fast' : 'daily_limit',
       `Chat API rate-limited the request (${detail})`,
+    )
+  }
+  // A 403 — this deployment's origin is not on the Worker's allow-list — is an
+  // access denial, not a service fault: the service is up and refusing this
+  // origin. The Worker sends it with code 'invalid_request' and status 403,
+  // so the status must be checked before the invalid-request branch below.
+  if (res.status === 403) {
+    return new ChatRequestError(
+      'blocked_origin',
+      `Chat API denied access from this origin (status ${res.status}, code ${code ?? 'unknown'})`,
     )
   }
   // A 400 — with or without the Worker's { error: { code } } body — means the request

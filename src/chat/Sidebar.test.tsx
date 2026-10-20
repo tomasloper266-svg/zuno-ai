@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** Sidebar search: typing filters the conversation list; a no-match query gets
  * its own empty state; clearing restores the full list. */
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Sidebar } from './Sidebar'
@@ -24,7 +24,7 @@ const conversations = [
   conv('c2', 'خطة تعلم البرمجة', 'أريد خطة دراسة لتعلم البرمجة من الصفر'),
 ]
 
-function renderSidebar(): void {
+function renderSidebar(onOpenShortcuts: () => void = () => {}): void {
   render(
     <Sidebar
       t={t}
@@ -35,6 +35,7 @@ function renderSidebar(): void {
       onNew={() => {}}
       onDelete={() => {}}
       onHome={() => {}}
+      onOpenShortcuts={onOpenShortcuts}
     />,
   )
 }
@@ -100,5 +101,33 @@ describe('local-only storage disclosure', () => {
       />,
     )
     expect(screen.getByText('المحادثات محفوظة في هذا المتصفح فقط ولا تنتقل بين الأجهزة.')).not.toBeNull()
+  })
+})
+
+describe('Sidebar kebab (more options → keyboard shortcuts)', () => {
+  it('opens the menu with focus on the shortcuts item; Escape closes and re-anchors on the kebab button', async () => {
+    renderSidebar()
+    const user = userEvent.setup()
+    const kebab = screen.getByRole('button', { name: t.chat.moreOptions })
+    expect(kebab.getAttribute('aria-haspopup')).toBe('menu')
+    expect(kebab.getAttribute('aria-expanded')).toBe('false')
+    await user.click(kebab)
+    expect(kebab.getAttribute('aria-expanded')).toBe('true')
+    const item = screen.getByRole('menuitem', { name: t.chat.shortcuts.title })
+    expect(document.activeElement).toBe(item)
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(document.activeElement).toBe(kebab)
+  })
+
+  it('choosing the shortcuts item closes the menu and asks the app to open the shortcuts panel', async () => {
+    const onOpenShortcuts = vi.fn()
+    renderSidebar(onOpenShortcuts)
+    const user = userEvent.setup()
+    const kebab = screen.getByRole('button', { name: t.chat.moreOptions })
+    await user.click(kebab)
+    await user.click(screen.getByRole('menuitem', { name: t.chat.shortcuts.title }))
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(onOpenShortcuts).toHaveBeenCalledTimes(1)
   })
 })

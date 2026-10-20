@@ -222,6 +222,21 @@
   opacity: 0.85;
 }
 
+/* Sidebar kebab ("more options") — a compact trigger in the footer; its menu
+ * opens UPWARD so it never spills past the viewport bottom. */
+.sidebar-actions {
+  position: relative;
+  margin-top: 6px;
+}
+.sidebar-actions .sidebar-kebab {
+  width: 28px;
+  height: 28px;
+}
+.sidebar-actions .conv-menu {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
 .sidebar-backdrop {
   display: none;
 }
@@ -1033,6 +1048,44 @@ html[lang='ar'] .chat-empty p {
   justify-content: flex-end; /* logical: inline-end in both RTL and LTR */
   gap: 8px;
   margin-top: 10px;
+}
+
+/* Shortcuts panel rows: action text on the inline start, its key(s) on the
+ * inline end — mirrored automatically in RTL and LTR. */
+.shortcuts-list {
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--border);
+}
+.shortcut-row:last-child {
+  border-bottom: none;
+}
+.shortcut-row dt {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.shortcut-row dd {
+  margin: 0;
+}
+.shortcut-row kbd {
+  font-family: inherit;
+  font-size: 11.5px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 2px 7px;
+  white-space: nowrap;
 }
 
 .dialog-actions button {

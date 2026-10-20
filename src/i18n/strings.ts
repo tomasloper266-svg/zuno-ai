@@ -55,6 +55,15 @@ export interface Strings {
     copied: string
     /** Header kebab menu holding conversation-level actions (copy, export). */
     conversationActions: string
+    /** Sidebar kebab (more options) holding app-level items like the shortcuts panel. */
+    moreOptions: string
+    /** The discoverable keyboard-shortcuts panel (opened by ? or the sidebar kebab). */
+    shortcuts: {
+      title: string
+      close: string
+      /** One row per available shortcut: what it does + the key(s) that trigger it. */
+      rows: { action: string; keys: string }[]
+    }
     copyConversation: string
     exportMarkdown: string
     exportJson: string
@@ -148,6 +157,17 @@ export const strings: Record<Lang, Strings> = {
       copy: 'Copy',
       copied: 'Copied',
       conversationActions: 'Conversation actions',
+      moreOptions: 'More options',
+      shortcuts: {
+        title: 'Keyboard shortcuts',
+        close: 'Close',
+        rows: [
+          { action: 'Send the message', keys: 'Enter' },
+          { action: 'Insert a new line', keys: 'Shift+Enter' },
+          { action: 'Stop the running reply', keys: 'Escape' },
+          { action: 'Open this shortcuts panel', keys: '?' },
+        ],
+      },
       copyConversation: 'Copy conversation',
       exportMarkdown: 'Export as Markdown',
       exportJson: 'Export as JSON',
@@ -255,6 +275,17 @@ export const strings: Record<Lang, Strings> = {
       copy: 'نسخ',
       copied: 'تم النسخ',
       conversationActions: 'إجراءات المحادثة',
+      moreOptions: 'خيارات إضافية',
+      shortcuts: {
+        title: 'اختصارات لوحة المفاتيح',
+        close: 'إغلاق',
+        rows: [
+          { action: 'إرسال الرسالة', keys: 'Enter' },
+          { action: 'إدراج سطر جديد', keys: 'Shift+Enter' },
+          { action: 'إيقاف الرد الجاري', keys: 'Escape' },
+          { action: 'فتح لوحة الاختصارات هذه', keys: '?' },
+        ],
+      },
       copyConversation: 'نسخ المحادثة كاملة',
       exportMarkdown: 'تصدير كـ Markdown',
       exportJson: 'تصدير كـ JSON',

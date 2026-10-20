@@ -1048,3 +1048,86 @@ describe('Conversation rename — inline, bilingual, persisted (wave DE)', () =>
     expect((JSON.parse(jsonContent) as { title: string }).title).toBe('خطة المشروع')
   })
 })
+
+describe('In-app keyboard shortcuts (wave FG)', () => {
+  /** Custom text matcher: the live streaming bubble (same as the S-suite). */
+  function streamingBubble(text: string): (content: string, element: Element | null) => boolean {
+    return (_content, element) => element?.className === 'bubble assistant' && element.textContent === text
+  }
+
+  it('Escape cuts an active stream — same trace as the Stop button — even while the composer is focused', async () => {
+    const signals: AbortSignal[] = []
+    replyMock.mockImplementation(
+      (_thread: ThreadMessage[], onDelta: (t: string) => void, signal: AbortSignal) => {
+        signals.push(signal)
+        onDelta('partial before escape,')
+        return new Promise<'completed' | 'aborted'>((resolve) => {
+          signal.addEventListener('abort', () => resolve('aborted'), { once: true })
+        })
+      },
+    )
+    const readState = renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'old reply')]))
+    const user = userEvent.setup()
+
+    fireEvent.click(regenerateButton())
+    await screen.findByText(streamingBubble('partial before escape,'))
+
+    // The functional-exception rule: Escape works while typing in the composer.
+    await user.click(screen.getByRole('textbox', { name: t.chat.placeholder }))
+    await user.keyboard('{Escape}')
+
+    await waitFor(() => expect(contents(storedMessages(readState))).toEqual(['hello', 'partial before escape,']))
+    expect(storedMessages(readState)[1]?.stopped).toBe(true)
+    expect(signals[0]?.aborted).toBe(true)
+    // A user stop is not a failure — no banner, composer released.
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByRole('button', { name: t.chat.stopGenerating })).toBeNull()
+  })
+
+  it('Escape without an active stream is inert — nothing breaks and sending still works', async () => {
+    streamReplyWith('a calm reply')
+    const readState = renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'old reply')]))
+    const user = userEvent.setup()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('alert')).toBeNull()
+
+    await user.type(screen.getByRole('textbox', { name: t.chat.placeholder }), 'one more')
+    fireEvent.click(screen.getByRole('button', { name: t.send }))
+    await screen.findByText('a calm reply')
+    expect(contents(storedMessages(readState))).toEqual(['hello', 'old reply', 'one more', 'a calm reply'])
+  })
+
+  it('? opens the shortcuts panel, which closes on Escape', async () => {
+    renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'old reply')]))
+    const user = userEvent.setup()
+    expect(screen.queryByRole('dialog', { name: t.chat.shortcuts.title })).toBeNull()
+
+    await user.keyboard('?')
+    expect(screen.getByRole('dialog', { name: t.chat.shortcuts.title })).toBeTruthy()
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', { name: t.chat.shortcuts.title })).toBeNull()
+  })
+
+  it('a literal ? typed into the composer is text, never the shortcut (and the panel opens from the sidebar kebab)', async () => {
+    renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'old reply')]))
+    const user = userEvent.setup()
+    const composer = screen.getByRole('textbox', { name: t.chat.placeholder })
+
+    await user.click(composer)
+    await user.keyboard('hello?')
+    expect(screen.queryByRole('dialog', { name: t.chat.shortcuts.title })).toBeNull()
+    expect((composer as HTMLTextAreaElement).value).toBe('hello?')
+
+    // The sidebar kebab's «Keyboard shortcuts» item opens the same panel.
+    const kebab = screen.getByRole('button', { name: t.chat.moreOptions })
+    await user.click(kebab)
+    await user.click(screen.getByRole('menuitem', { name: t.chat.shortcuts.title }))
+    expect(screen.getByRole('dialog', { name: t.chat.shortcuts.title })).toBeTruthy()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', { name: t.chat.shortcuts.title })).toBeNull()
+    // Focus returns to the kebab button that opened the panel.
+    expect(document.activeElement).toBe(kebab)
+  })
+})

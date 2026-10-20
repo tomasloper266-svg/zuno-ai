@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { Conversation, Message } from '../types'
 import { uid } from '../lib/util'
@@ -10,11 +10,13 @@ import { applyDerivedTitle, capRenameTitle } from '../lib/title'
 import { requestSmartTitle } from '../lib/smartTitle'
 import { Sidebar } from '../chat/Sidebar'
 import { ConfirmDeleteDialog } from '../chat/ConfirmDeleteDialog'
+import { ShortcutsDialog } from '../chat/ShortcutsDialog'
 import { MessageBubble } from '../chat/MessageBubble'
 import { ConversationActions } from '../chat/ConversationActions'
 import { Composer } from '../chat/Composer'
 import { Brand, ZunoLogo } from '../components/ZunoLogo'
 import { Controls } from '../components/Controls'
+import { isTypingTarget } from '../lib/util'
 import type { Lang, Strings } from '../i18n/strings'
 import type { Theme } from '../App'
 
@@ -164,6 +166,57 @@ export function Chat({
   useEffect(() => {
     if (searchFocusPending) setSidebarCollapsed(false)
   }, [searchFocusPending])
+
+  // In-app keyboard shortcuts, made discoverable in the shortcuts panel
+  // (ShortcutsDialog — opened by ? or the sidebar kebab's menu item).
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  // The element focus returns to when the panel closes: whatever had focus at
+  // open time (the sidebar kebab after a menu-item open, or the previously
+  // focused control for a ?-key open).
+  const shortcutsOpenerRef = useRef<HTMLElement | null>(null)
+
+  // Stable identity: only refs and the state setter are touched, so the
+  // ?-listener effect can subscribe once per modal-state change.
+  const openShortcuts = useCallback((): void => {
+    shortcutsOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setShortcutsOpen(true)
+  }, [])
+
+  function closeShortcuts(): void {
+    setShortcutsOpen(false)
+    shortcutsOpenerRef.current?.focus()
+    shortcutsOpenerRef.current = null
+  }
+
+  // Escape cuts the in-flight stream — the same trace as the Stop button (the
+  // engine resolves 'aborted' and whatever text arrived is committed). It is
+  // the one shortcut that stays live while typing. When a modal is open
+  // (delete dialog, shortcuts panel) that modal owns Escape instead.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent): void {
+      if (e.key !== 'Escape') return
+      if (deleteTargetId !== null || shortcutsOpen) return
+      if (!inFlightRef.current || abortRef.current === null) return
+      abortRef.current.abort()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [deleteTargetId, shortcutsOpen])
+
+  // ? opens the shortcuts panel — never while typing (a literal ? is a
+  // character in the composer, not a command) and never while a modal is
+  // already up.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent): void {
+      if (e.key !== '?') return
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      if (isTypingTarget(e.target)) return
+      if (deleteTargetId !== null || shortcutsOpen) return
+      openShortcuts()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [deleteTargetId, shortcutsOpen, openShortcuts])
 
   const NEAR_BOTTOM_PX = 120
 
@@ -481,6 +534,7 @@ export function Chat({
         collapsed={sidebarCollapsed}
         autoFocusSearch={searchFocusPending}
         onSearchFocused={onSearchFocused}
+        onOpenShortcuts={openShortcuts}
         onSelect={(id) => {
           onSelect(id)
           if (isMobile) setSidebarCollapsed(true)
@@ -638,6 +692,7 @@ export function Chat({
       </div>
 
       {deleteTargetId !== null && <ConfirmDeleteDialog t={t} onConfirm={confirmDelete} onCancel={closeDeleteDialog} />}
+      {shortcutsOpen && <ShortcutsDialog t={t} onClose={closeShortcuts} />}
     </div>
   )
 }

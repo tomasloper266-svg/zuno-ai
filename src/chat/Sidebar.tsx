@@ -3,6 +3,7 @@ import { Brand } from '../components/ZunoLogo'
 import { IS_DEMO } from '../lib/engine'
 import { filterConversations } from '../lib/search'
 import { capRenameTitle } from '../lib/title'
+import { useMenuFocus } from '../hooks/useMenuFocus'
 import type { Conversation } from '../types'
 import type { Strings } from '../i18n/strings'
 
@@ -26,6 +27,8 @@ interface SidebarProps {
   autoFocusSearch?: boolean
   /** Acknowledge the focus request so the intent is consumed exactly once. */
   onSearchFocused?: () => void
+  /** Open the keyboard-shortcuts panel (the sidebar kebab's menu item). */
+  onOpenShortcuts?: () => void
 }
 
 export function Sidebar({
@@ -42,10 +45,24 @@ export function Sidebar({
   onRenameCancel = () => {},
   autoFocusSearch = false,
   onSearchFocused = () => {},
+  onOpenShortcuts = () => {},
 }: SidebarProps): React.JSX.Element {
   const [query, setQuery] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
+  // The sidebar kebab ("more options"): one menu with app-level items —
+  // currently the keyboard-shortcuts panel entry. Same focus management as
+  // the header kebab (useMenuFocus), opening upward from the footer.
+  const [actionsOpen, setActionsOpen] = useState(false)
+  const { rootRef: kebabRootRef, buttonRef: kebabButtonRef, menuRef: kebabMenuRef } = useMenuFocus(
+    actionsOpen,
+    closeActions,
+  )
   const visible = filterConversations(conversations, query)
+
+  function closeActions(refocusButton: boolean): void {
+    setActionsOpen(false)
+    if (refocusButton) kebabButtonRef.current?.focus()
+  }
 
   /** Settle an inline rename: commit a real change, cancel an empty or
    * unchanged one (an untouched edit must not pin the title as manual). */
@@ -146,6 +163,45 @@ export function Sidebar({
         <div className="sidebar-footer">
           {IS_DEMO ? t.footerNote : t.footerNoteLive}
           <span className="sidebar-storage-note">{t.storageLocalNote}</span>
+          <div className="sidebar-actions" ref={kebabRootRef}>
+            <button
+              type="button"
+              ref={kebabButtonRef}
+              className="icon-btn sidebar-kebab"
+              aria-label={t.chat.moreOptions}
+              aria-haspopup="menu"
+              aria-expanded={actionsOpen}
+              onClick={() => (actionsOpen ? closeActions(true) : setActionsOpen(true))}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="12" cy="5.5" r="1.7" />
+                <circle cx="12" cy="12" r="1.7" />
+                <circle cx="12" cy="18.5" r="1.7" />
+              </svg>
+            </button>
+            {actionsOpen && (
+              <div className="conv-menu sidebar-menu" role="menu" aria-label={t.chat.moreOptions} ref={kebabMenuRef}>
+                <button
+                  type="button"
+                  role="menuitem"
+                  tabIndex={-1}
+                  onClick={() => {
+                    // Re-anchor on the kebab button first — the menu item is
+                    // about to unmount, and the panel's Escape must have a
+                    // living element to return focus to.
+                    closeActions(true)
+                    onOpenShortcuts()
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                    <rect x="2.5" y="7" width="19" height="10" rx="2" />
+                    <path d="M6.5 10.5h.01M10 10.5h.01M13.5 10.5h.01M17 10.5h.01M6.5 13.5h.01M9.5 13.5h.01M12.5 13.5h.01M15.5 13.5h.01" strokeLinecap="round" />
+                  </svg>
+                  {t.chat.shortcuts.title}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </aside>

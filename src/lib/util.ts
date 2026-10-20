@@ -27,3 +27,15 @@ export async function copyText(text: string): Promise<boolean> {
     }
   }
 }
+
+/** True when the event target is a text-entry surface (a form field the user
+ * types into, or a contentEditable region). Global keyboard shortcuts must
+ * not fire while the user is typing — a literal "?" or any other character
+ * there is text, not a command. (Functional keys like Escape are handled
+ * separately by the features that own them.) */
+export function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.isContentEditable) return true
+  const tag = target.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+}

@@ -2,8 +2,10 @@
  * Strict validation for POST /chat bodies.
  *
  * The wire contract matches the frontend's `src/lib/engine.ts`:
- *   { messages: [{ role: "user" | "assistant", content: string }, ...] }
- * Unknown fields are dropped — only clean { role, content } turns survive.
+ *   { messages: [{ role: "user" | "assistant", content: string }, ...],
+ *     stream?: boolean }
+ * Unknown fields are dropped — only clean { role, content } turns survive;
+ * `stream` opts the response into SSE instead of a JSON body.
  */
 
 export interface ChatTurn {
@@ -22,7 +24,7 @@ export const LIMITS = {
 } as const
 
 export type ValidationResult =
-  | { ok: true; turns: ChatTurn[]; totalChars: number }
+  | { ok: true; turns: ChatTurn[]; totalChars: number; stream: boolean }
   | { ok: false; reason: string }
 
 export function validateChatBody(raw: string): ValidationResult {
@@ -40,6 +42,13 @@ export function validateChatBody(raw: string): ValidationResult {
   const messages = (parsed as { messages?: unknown }).messages
   if (!Array.isArray(messages)) {
     return { ok: false, reason: "messages must be an array" }
+  }
+
+  // Optional SSE opt-in. Strict about the type: a truthy non-boolean is invalid,
+  // so a client can never get a stream it did not exactly ask for.
+  const stream = (parsed as { stream?: unknown }).stream
+  if (stream !== undefined && typeof stream !== "boolean") {
+    return { ok: false, reason: "stream must be a boolean" }
   }
   if (messages.length < LIMITS.minMessages || messages.length > LIMITS.maxMessages) {
     return {
@@ -79,5 +88,5 @@ export function validateChatBody(raw: string): ValidationResult {
     turns.push({ role, content })
   }
 
-  return { ok: true, turns, totalChars }
+  return { ok: true, turns, totalChars, stream: stream === true }
 }

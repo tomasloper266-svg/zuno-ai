@@ -14,10 +14,35 @@ export interface AdapterSuccess {
   upstreamStatus: number
 }
 
+/**
+ * A committed provider stream: the upstream accepted the request (pre-flight
+ * passed — status is honest) and text deltas are ready to be pulled.
+ */
+export interface AdapterStream {
+  /** HTTP status the provider returned (for server-side logs only). */
+  readonly upstreamStatus: number
+  /**
+   * Text deltas in arrival order. Throws UpstreamError on a mid-stream failure —
+   * the caller decides how to surface it (SSE `error` event for /chat).
+   */
+  readonly deltas: AsyncGenerator<string, void, void>
+}
+
 /** A chat-completion provider behind the /chat endpoint. No tool/function calling. */
 export interface ProviderAdapter {
   readonly name: string
   generate(input: AdapterInput, env: import("../env").Env): Promise<AdapterSuccess>
+  /**
+   * Open a streaming completion. Throws UpstreamError while the provider is
+   * still pre-flight (request rejected, body missing) — after that point the
+   * caller has only committed to a stream, so later failures surface through
+   * `deltas` throwing, not through an HTTP status.
+   */
+  stream(
+    input: AdapterInput,
+    env: import("../env").Env,
+    signal?: AbortSignal,
+  ): Promise<AdapterStream>
 }
 
 type ProviderFailureCode = "rate_limited" | "upstream_error" | "over_capacity" | "config_error"

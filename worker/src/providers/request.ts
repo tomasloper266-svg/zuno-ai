@@ -10,14 +10,19 @@ export async function postJsonToProvider(
   url: string,
   headers: Record<string, string>,
   body: unknown,
+  signal?: AbortSignal,
 ): Promise<Response> {
   try {
     return await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...headers },
       body: JSON.stringify(body),
+      signal,
     })
   } catch (error) {
+    // The caller aborted (client disconnect): rethrow the original abort so the
+    // pump can tell it apart from a provider failure — no synthetic error here.
+    if (signal?.aborted) throw error
     // Network-level failure (DNS, TLS, timeout). Status detail is a log concern only.
     throw new UpstreamError(
       "upstream_error",
@@ -25,6 +30,25 @@ export async function postJsonToProvider(
       { status: 502 },
     )
   }
+}
+
+/**
+ * Pre-flight gate for streaming: the provider must accept the request with a
+ * readable body BEFORE the client stream starts, so pre-flight failures keep
+ * honest HTTP statuses through the normal error envelope. Returns the verified
+ * (non-null) body for the adapter to stream from.
+ */
+export function ensureStreamable(response: Response, provider: string): ReadableStream<Uint8Array> {
+  if (!response.ok) {
+    throw upstreamErrorFor(response.status, parseRetryAfter(response.headers))
+  }
+  if (response.body === null) {
+    throw new UpstreamError("upstream_error", `${provider} returned no body to stream`, {
+      status: 502,
+      upstreamStatus: response.status,
+    })
+  }
+  return response.body as ReadableStream<Uint8Array>
 }
 
 /** Positive integer Retry-After from the provider, if present. */

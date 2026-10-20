@@ -3,7 +3,7 @@ import { GeminiAdapter } from "../src/providers/gemini"
 import { OpenAIAdapter } from "../src/providers/openai"
 import { UpstreamError } from "../src/providers/types"
 import type { Env } from "../src/env"
-import type { AdapterInput } from "../src/providers/types"
+import type { AdapterInput, AdapterStream } from "../src/providers/types"
 
 /**
  * Adapter mapping tests with a recorded fetch stub — no network access.
@@ -191,5 +191,168 @@ describe("openai-compatible adapter", () => {
       .catch((e: unknown) => e)
     expect(error).toBeInstanceOf(UpstreamError)
     expect((error as UpstreamError).code).toBe("rate_limited")
+  })
+})
+
+/** ---------- streaming adapters (mocked SSE upstream) ---------- */
+
+interface StreamCaptured {
+  url: string
+  headers: Record<string, string>
+  body: string
+  signal: AbortSignal | undefined
+}
+
+type RecordingStreamFetch = (
+  input: unknown,
+  init?: { headers?: Record<string, string>; body?: string; signal?: AbortSignal },
+) => Promise<Response>
+
+function stubSseFetch(sseBody: string, init?: { status?: number; headers?: Record<string, string> }): StreamCaptured {
+  const captured: StreamCaptured = { url: "", headers: {}, body: "", signal: undefined }
+  const stub: RecordingStreamFetch = async (input, requestInit) => {
+    captured.url = String(input)
+    captured.headers = requestInit?.headers ?? {}
+    captured.body = requestInit?.body ?? ""
+    captured.signal = requestInit?.signal
+    return new Response(sseBody, { status: init?.status ?? 200, headers: init?.headers })
+  }
+  vi.stubGlobal("fetch", stub)
+  return captured
+}
+
+/** Drain every text delta the adapter stream yields, in arrival order. */
+async function collectDeltas(stream: AdapterStream): Promise<string[]> {
+  const texts: string[] = []
+  for await (const text of stream.deltas) texts.push(text)
+  return texts
+}
+
+/** A Gemini SSE body: text chunks then a final no-text finishReason chunk. */
+function geminiSse(...texts: string[]): string {
+  return (
+    texts
+      .map((text) => `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] })}\r\n\r\n`)
+      .join("") + `data: ${JSON.stringify({ candidates: [{ finishReason: "stop" }] })}\r\n\r\n`
+  )
+}
+
+function openaiSse(...texts: string[]): string {
+  return (
+    texts
+      .map((text) => `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`)
+      .join("") + "data: [DONE]\n\n"
+  )
+}
+
+describe("gemini streaming adapter", () => {
+  it("posts to streamGenerateContent?alt=sse and yields chunk texts in order", async () => {
+    const captured = stubSseFetch(geminiSse("مرحبا", " — ", "hi!"))
+
+    const stream = await new GeminiAdapter().stream(input, env)
+
+    expect(await collectDeltas(stream)).toEqual(["مرحبا", " — ", "hi!"])
+    expect(stream.upstreamStatus).toBe(200)
+    expect(captured.url).toBe(
+      "https://gemini.mock.test/v1beta/models/gemini-test:streamGenerateContent?alt=sse",
+    )
+    expect(captured.headers["x-goog-api-key"]).toBe("test-key")
+    // Same payload shape as the one-shot endpoint.
+    const body = JSON.parse(captured.body) as { systemInstruction: unknown; contents: unknown[] }
+    expect(body.systemInstruction).toBeDefined()
+    expect(body.contents).toHaveLength(3)
+  })
+
+  it("tolerates CRLF framing, : comments, and chunks with no text", async () => {
+    const body =
+      ": keep-alive\r\n\r\n" +
+      `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: "a" }] } }] })}\r\n\r\n` +
+      `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: "b" }] } }] })}\r\n\r\n` +
+      `data: ${JSON.stringify({ candidates: [{ finishReason: "stop" }] })}\r\n\r\n`
+    stubSseFetch(body)
+
+    const stream = await new GeminiAdapter().stream(input, env)
+
+    expect(await collectDeltas(stream)).toEqual(["a", "b"])
+  })
+
+  it("passes the caller's abort signal to the upstream fetch", async () => {
+    const captured = stubSseFetch(geminiSse("x"))
+    const controller = new AbortController()
+
+    await new GeminiAdapter().stream(input, env, controller.signal)
+
+    expect(captured.signal).toBe(controller.signal)
+  })
+
+  it("maps a pre-flight provider rejection to an UpstreamError before any delta", async () => {
+    stubSseFetch("upstream secret body", { status: 429, headers: { "Retry-After": "7" } })
+
+    const error = await new GeminiAdapter()
+      .stream(input, env)
+      .catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(UpstreamError)
+    expect((error as UpstreamError).code).toBe("rate_limited")
+    expect((error as UpstreamError).retryAfterSeconds).toBe(7)
+    expect((error as UpstreamError).message).not.toContain("upstream secret body")
+  })
+
+  it("raises upstream_error on a malformed mid-stream chunk", async () => {
+    stubSseFetch(geminiSse("partial") + "data: {broken\n\n")
+
+    const stream = await new GeminiAdapter().stream(input, env)
+    expect((await stream.deltas.next()).value).toBe("partial")
+
+    const error = await stream.deltas.next().catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(UpstreamError)
+    expect((error as UpstreamError).code).toBe("upstream_error")
+  })
+
+  it("requires AI_API_KEY and AI_MODEL for streaming too", async () => {
+    const error = await new GeminiAdapter()
+      .stream(input, { ...env, AI_API_KEY: undefined })
+      .catch((e: unknown) => e)
+    expect((error as UpstreamError).code).toBe("config_error")
+  })
+})
+
+describe("openai streaming adapter", () => {
+  it("sets stream:true, yields delta contents in order, and stops at [DONE]", async () => {
+    const captured = stubSseFetch(openaiSse("Hel", "lo"))
+
+    const stream = await new OpenAIAdapter().stream(input, env)
+
+    expect(await collectDeltas(stream)).toEqual(["Hel", "lo"])
+    expect(captured.url).toBe("https://gemini.mock.test/chat/completions")
+    expect(captured.headers["Authorization"]).toBe("Bearer test-key")
+    const body = JSON.parse(captured.body) as { stream: boolean; model: string }
+    expect(body.stream).toBe(true)
+    expect(body.model).toBe("gemini-test")
+  })
+
+  it("keeps the one-shot request free of the stream flag", async () => {
+    const captured = stubFetch({
+      status: 200,
+      body: JSON.stringify({ choices: [{ message: { content: "x" } }] }),
+    })
+    await new OpenAIAdapter().generate(input, env)
+    const body = JSON.parse(captured.body) as { stream?: unknown }
+    expect("stream" in body).toBe(false)
+  })
+
+  it("maps a pre-flight 401 (bad key) to config_error", async () => {
+    stubSseFetch("bad key", { status: 401 })
+    const error = await new OpenAIAdapter()
+      .stream(input, env)
+      .catch((e: unknown) => e)
+    expect((error as UpstreamError).code).toBe("config_error")
+  })
+
+  it("requires AI_API_KEY and AI_MODEL for streaming too", async () => {
+    const error = await new OpenAIAdapter()
+      .stream(input, { ...env, AI_MODEL: undefined })
+      .catch((e: unknown) => e)
+    expect((error as UpstreamError).code).toBe("config_error")
   })
 })

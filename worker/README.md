@@ -13,9 +13,10 @@ Matches `src/lib/engine.ts` in the frontend exactly:
 ```
 POST /chat
 Content-Type: application/json
-{ "messages": [ { "role": "user" | "assistant", "content": "..." }, ... ] }
+{ "messages": [ { "role": "user" | "assistant", "content": "..." }, ... ], "stream": true }
 
-→ 200 { "reply": "..." }
+→ 200 { "reply": "..." }                     (stream absent or false)
+→ 200 text/event-stream                      (stream: true — see below)
 ```
 
 ```
@@ -23,9 +24,38 @@ GET /health → 200 { "ok": true }
 ```
 
 Validation caps: 1–20 messages, 1–4000 chars per message, ≤8000 chars total,
-roles limited to `user`/`assistant`, unknown fields dropped, body capped at
-32 KiB before parsing. Requests without an `Origin` header (non-browser
-clients) are allowed; browser requests must come from an allow-listed origin.
+roles limited to `user`/`assistant`, `stream` must be a boolean when present,
+unknown fields dropped, body capped at 32 KiB before parsing. Requests without
+an `Origin` header (non-browser clients) are allowed; browser requests must
+come from an allow-listed origin.
+
+## Streaming (SSE)
+
+With `"stream": true` the reply arrives as an unbuffered `text/event-stream`
+(CORS headers behave exactly as on the JSON shape):
+
+```
+event: delta
+data: {"text":"..."}
+
+event: done
+data: {"reason":"stop"}
+```
+
+- Concatenate `delta` texts in arrival order — they form the full reply.
+- Everything before the stream starts — validation, rate limiting, and the
+  provider's pre-flight (its response headers) — happens first. A failure up to
+  that point is a normal JSON error with an honest status, never a stream.
+- Once streaming has begun (200 committed), a failure is one final
+  `event: error` with `data: {"error":{"code":"..."}}` (codes from the table
+  below), then the stream closes — never a half-open stream.
+- A client disconnect aborts `request.signal`; the Worker cancels the provider
+  request upstream and stops pulling deltas — no orphaned generation.
+- Gemini is streamed via `:streamGenerateContent?alt=sse` (text parts pass
+  through as deltas); OpenAI via `"stream": true` chat completions, with
+  `data: [DONE]` ending the stream.
+- A client that sent `stream: true` to a backend predating this flag still gets
+  a JSON `200 { reply }` and falls back to a single delta (`src/lib/engine.ts`).
 
 ## Error envelope
 
@@ -55,11 +85,12 @@ sync if you ever change the table.
 
 `src/providers/` defines a `ProviderAdapter` interface and two implementations:
 
-- **gemini** (default) — `generativelanguage.googleapis.com` `generateContent`,
-  server-side system instruction, `maxOutputTokens: 1024`. No tool/function calling.
-- **openai** — OpenAI-compatible `/chat/completions` stub (`AI_BASE_URL` can
-  point at any compatible endpoint). Implemented against the same interface but
-  not yet exercised against a live endpoint.
+- **gemini** (default) — `generativelanguage.googleapis.com` `generateContent`
+  (streamed via `streamGenerateContent?alt=sse`), server-side system
+  instruction, `maxOutputTokens: 1024`. No tool/function calling.
+- **openai** — OpenAI-compatible `/chat/completions` (`AI_BASE_URL` can point
+  at any compatible endpoint; streamed with `stream: true`). Implemented
+  against the same interface but not yet exercised against a live endpoint.
 
 Switching provider is an env change, never a frontend rewrite:
 
@@ -88,7 +119,7 @@ worker/
     ratelimit.ts         # D1 counters, SHA-256 IP hashing
     http.ts              # envelope + CORS helpers
     env.ts               # Env bindings
-    providers/           # adapter interface, factory, gemini, openai stub
+    providers/           # adapter interface, factory, gemini, openai, SSE reader
   test/                  # vitest (@cloudflare/vitest-pool-workers), local D1
 ```
 
@@ -151,4 +182,4 @@ at frontend build time (this `worker/` change does not touch the frontend).
 - CORS is browser-enforcement only; requests without an `Origin` header are not
   blocked (rate limiting is the abuse guard for non-browser traffic).
 - The `openai` adapter is untested against a live endpoint.
-- No conversation persistence, no auth/accounts, no streaming — M1 scope.
+- No conversation persistence and no auth/accounts.

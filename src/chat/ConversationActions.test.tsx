@@ -10,14 +10,21 @@ import type { Conversation } from '../types'
 
 // user-event replaces navigator.clipboard with its own stub, so assert on the
 // component's actual behavior: it formats the conversation and asks copyText
-// (the clipboard boundary) to write it.
+// (the clipboard boundary) to write it. downloadTextFile is stubbed for the
+// same reason — the formatters themselves are covered in conversationExport.test.ts.
 vi.mock('../lib/util', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/util')>()
   return { ...actual, copyText: vi.fn().mockResolvedValue(true) }
 })
+vi.mock('../lib/conversationExport', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/conversationExport')>()
+  return { ...actual, downloadTextFile: vi.fn() }
+})
 
 const { copyText } = await import('../lib/util')
 const copyTextMock = vi.mocked(copyText)
+const { downloadTextFile } = await import('../lib/conversationExport')
+const downloadMock = vi.mocked(downloadTextFile)
 
 const t = strings.en
 
@@ -37,6 +44,7 @@ afterEach(() => {
 
 beforeEach(() => {
   copyTextMock.mockClear()
+  downloadMock.mockClear()
 })
 
 describe('ConversationActions', () => {
@@ -60,6 +68,30 @@ describe('ConversationActions', () => {
     await user.click(screen.getByRole('button', { name: t.chat.conversationActions }))
     expect(screen.getByRole('menu')).toBeTruthy()
     await user.keyboard('{Escape}')
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('exports the conversation as Markdown and closes the menu', async () => {
+    render(<ConversationActions t={t} conversation={conversation} />)
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: t.chat.conversationActions }))
+    await user.click(screen.getByRole('menuitem', { name: t.chat.exportMarkdown }))
+    const [filename, content, mime] = downloadMock.mock.calls[0] ?? []
+    expect(filename?.endsWith('.md')).toBe(true)
+    expect(content).toContain('# Debounce in React')
+    expect(mime).toBe('text/markdown')
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('exports the conversation as lossless JSON and closes the menu', async () => {
+    render(<ConversationActions t={t} conversation={conversation} />)
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: t.chat.conversationActions }))
+    await user.click(screen.getByRole('menuitem', { name: t.chat.exportJson }))
+    const [filename, content, mime] = downloadMock.mock.calls[0] ?? []
+    expect(filename?.endsWith('.json')).toBe(true)
+    expect(JSON.parse(content ?? '{}')).toEqual(conversation)
+    expect(mime).toBe('application/json')
     expect(screen.queryByRole('menu')).toBeNull()
   })
 })

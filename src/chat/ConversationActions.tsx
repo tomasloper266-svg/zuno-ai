@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Conversation } from '../types'
 import { conversationToText } from '../lib/conversationText'
+import { conversationToJson, conversationToMarkdown, downloadTextFile, exportFilename } from '../lib/conversationExport'
 import { copyText } from '../lib/util'
 import type { Strings } from '../i18n/strings'
 
@@ -48,6 +49,16 @@ export function ConversationActions({ t, conversation }: ConversationActionsProp
     }
   }
 
+  function handleExport(format: 'md' | 'json'): void {
+    if (conversation === null) return
+    if (format === 'md') {
+      downloadTextFile(exportFilename(conversation, 'md'), conversationToMarkdown(conversation, t.chat.you), 'text/markdown')
+    } else {
+      downloadTextFile(exportFilename(conversation, 'json'), conversationToJson(conversation), 'application/json')
+    }
+    setOpen(false)
+  }
+
   return (
     <div className="conv-actions" ref={rootRef}>
       <button
@@ -78,6 +89,20 @@ export function ConversationActions({ t, conversation }: ConversationActionsProp
               <path d="M5.5 14.5A2 2 0 014 12.6V6a2 2 0 012-2h6.6a2 2 0 011.9 1.5" strokeLinecap="round" />
             </svg>
             {t.chat.copyConversation}
+          </button>
+          <button type="button" role="menuitem" onClick={() => handleExport('md')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+              <path d="M12 4v11M7.5 10.5L12 15l4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M5 19h14" strokeLinecap="round" />
+            </svg>
+            {t.chat.exportMarkdown}
+          </button>
+          <button type="button" role="menuitem" onClick={() => handleExport('json')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+              <path d="M12 4v11M7.5 10.5L12 15l4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M5 19h14" strokeLinecap="round" />
+            </svg>
+            {t.chat.exportJson}
           </button>
         </div>
       )}

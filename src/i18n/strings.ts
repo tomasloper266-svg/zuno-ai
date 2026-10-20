@@ -52,6 +52,8 @@ export interface Strings {
     /** Header kebab menu holding conversation-level actions (copy, export). */
     conversationActions: string
     copyConversation: string
+    exportMarkdown: string
+    exportJson: string
     regenerate: string
     retry: string
     /** Stop button shown while a reply is streaming in. */
@@ -123,6 +125,8 @@ export const strings: Record<Lang, Strings> = {
       copied: 'Copied',
       conversationActions: 'Conversation actions',
       copyConversation: 'Copy conversation',
+      exportMarkdown: 'Export as Markdown',
+      exportJson: 'Export as JSON',
       regenerate: 'Regenerate',
       retry: 'Retry',
       stopGenerating: 'Stop generating',
@@ -212,6 +216,8 @@ export const strings: Record<Lang, Strings> = {
       copied: 'تم النسخ',
       conversationActions: 'إجراءات المحادثة',
       copyConversation: 'نسخ المحادثة كاملة',
+      exportMarkdown: 'تصدير كـ Markdown',
+      exportJson: 'تصدير كـ JSON',
       regenerate: 'إعادة التوليد',
       retry: 'إعادة المحاولة',
       stopGenerating: 'إيقاف التوليد',

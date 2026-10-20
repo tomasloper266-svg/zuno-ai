@@ -2,7 +2,7 @@ import type { Conversation } from '../types'
 
 /** Assistant role label in copied/exported text — the brand name in both
  * languages (MessageBubble renders the ZUNO logo for assistant turns). */
-const ASSISTANT_NAME = 'ZUNO'
+export const ASSISTANT_NAME = 'ZUNO'
 
 /**
  * Format the full conversation as plain text for the clipboard: the title,

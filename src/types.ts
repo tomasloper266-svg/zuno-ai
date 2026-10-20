@@ -18,4 +18,12 @@ export interface Conversation {
   title: string
   createdAt: number
   messages: Message[]
+  /**
+   * True while `title` is still the creation-time slice of the first user
+   * message; the heuristic title (lib/title deriveTitle) replaces it when the
+   * first reply completes. Conversations stored before this field existed have
+   * it undefined — treated as provisional, so their next completed reply
+   * upgrades the title too.
+   */
+  titleProvisional?: boolean
 }

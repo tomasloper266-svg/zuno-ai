@@ -5,6 +5,7 @@ import { uid } from '../lib/util'
 import { renderMarkdown } from '../lib/markdown'
 import { recentMessagesForRequest, IS_DEMO, streamAssistantReply, ChatRequestError } from '../lib/engine'
 import type { ChatErrorKind, ThreadMessage } from '../lib/engine'
+import { applyDerivedTitle } from '../lib/title'
 import { Sidebar } from '../chat/Sidebar'
 import { MessageBubble } from '../chat/MessageBubble'
 import { Composer } from '../chat/Composer'
@@ -187,7 +188,11 @@ export function Chat({
           ts: Date.now(),
           demo: IS_DEMO,
         }
-        upsertConversation(convId, (conv) => ({ ...conv, messages: [...conv.messages, assistantMessage] }))
+        // One atomic state update: commit the reply AND swap the provisional
+        // title for the heuristic one (no-op once the title is finalized).
+        upsertConversation(convId, (conv) =>
+          applyDerivedTitle({ ...conv, messages: [...conv.messages, assistantMessage] }),
+        )
       } else if (outcome === 'completed') {
         // The stream finished but carried no reply text at all.
         setErrorKind('service')
@@ -227,6 +232,9 @@ export function Chat({
         id: convId,
         title: clean.slice(0, 60),
         createdAt: now,
+        // Provisional creation-time slice — replaced by the heuristic title
+        // (lib/title) the moment the first reply completes.
+        titleProvisional: true,
         // The greeting is seeded HERE, at creation, as the first message:
         // insertion order is the ordering source of truth, so a new
         // conversation always opens with it (no render-time re-ordering).

@@ -1085,3 +1085,77 @@ html[lang='ar'] .chat-empty p {
   line-height: 1.5;
   box-shadow: var(--shadow-1);
 }
+
+/* ---------- Markdown elements (assistant bubbles) ---------- */
+/* Headings inside a bubble: compact, in the bubble's own font scale. */
+.bubble h1,
+.bubble h2,
+.bubble h3,
+.bubble h4 {
+  margin: 10px 0 6px;
+  line-height: 1.35;
+}
+.bubble h1:first-child,
+.bubble h2:first-child,
+.bubble h3:first-child,
+.bubble h4:first-child {
+  margin-top: 0;
+}
+.bubble h1 {
+  font-size: 1.25em;
+}
+.bubble h2 {
+  font-size: 1.15em;
+}
+.bubble h3 {
+  font-size: 1.06em;
+}
+.bubble h4 {
+  font-size: 1em;
+}
+
+/* Lists: logical padding so RTL/LTR indent correctly; two nesting levels. */
+.bubble ul,
+.bubble ol {
+  margin: 6px 0;
+  padding-inline-start: 22px;
+}
+.bubble li {
+  margin: 2px 0;
+}
+.bubble li > ul,
+.bubble li > ol {
+  margin: 2px 0;
+}
+
+/* Links: only http(s)/mailto survive the renderer; wrap long URLs instead of
+   overflowing. */
+.bubble a {
+  color: var(--accent);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+/* Simple tables: the wrapper scrolls within the bubble when a table is wide —
+   the bubble itself never overflows horizontally. */
+.bubble .md-table-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+  margin: 8px 0;
+}
+.bubble table {
+  border-collapse: collapse;
+  font-size: 0.95em;
+  max-width: 100%;
+}
+.bubble th,
+.bubble td {
+  border: 1px solid var(--border-strong);
+  padding: 4px 10px;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.bubble th {
+  background: var(--surface-2);
+  font-weight: 600;
+}

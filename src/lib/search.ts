@@ -2,8 +2,9 @@ import type { Conversation } from '../types'
 
 /**
  * Client-side search across saved conversations — titles and message contents,
- * straight from localStorage. No network, no index: the store is capped at 50
- * conversations, so a linear scan is instant.
+ * straight from localStorage. No network, no index: the store is the FULL
+ * local history (uncapped — search covers every saved conversation), and a
+ * linear scan over that scale is instant.
  */
 
 /**

@@ -409,7 +409,11 @@ export function Chat({
         // conversation always opens with it (no render-time re-ordering).
         messages: [greeting, userMessage],
       }
-      setConversations((prev) => [conv, ...prev].slice(0, 50))
+      // The full history is kept — NO silent truncation of older
+      // conversations (the audit's no-silent-loss rule). Storage pressure, if
+      // it ever materializes, surfaces through the save-failure notice rather
+      // than invisible deletion.
+      setConversations((prev) => [conv, ...prev])
       onSelect(convId)
     } else {
       upsertConversation(convId, (conv) => ({ ...conv, messages: [...conv.messages, userMessage] }))

@@ -814,6 +814,63 @@ describe('Conversation deletion — confirmed, never silent (wave DE)', () => {
   })
 })
 
+describe('No silent truncation — the full history is kept (wave DE)', () => {
+  it('a conversation with 60+ messages stays complete — no trimming, no loss', async () => {
+    const user = userEvent.setup()
+    const longMessages: Message[] = Array.from({ length: 65 }, (_, i) =>
+      msg(i % 2 === 0 ? 'user' : 'assistant', `m${i}`, `message number ${i}`),
+    )
+    streamReplyWith('assistant reply sixty six')
+    const readState = renderChat([seededConversations(longMessages)[0]])
+
+    // All 65 stored messages are present as rendered bubbles.
+    expect(readState()[0].messages).toHaveLength(65)
+    expect(screen.getByText('message number 0')).not.toBeNull()
+    expect(screen.getByText('message number 64')).not.toBeNull()
+
+    // Sending another message appends without trimming anything: user turn
+    // AND assistant reply both commit. (Await the assistant text — unique —
+    // since the user text also appears as the sidebar title slice.)
+    await user.type(screen.getByRole('textbox', { name: t.chat.placeholder }), 'one more')
+    await user.click(screen.getByRole('button', { name: t.send }))
+    await screen.findByText('assistant reply sixty six')
+
+    const stored = readState()[0].messages
+    expect(stored).toHaveLength(67)
+    expect(stored[0].id).toBe('m0')
+    expect(stored[64].content).toBe('message number 64')
+  })
+
+  it('creating a 51st conversation keeps every older conversation — the cap is gone', async () => {
+    const user = userEvent.setup()
+    const fifty = Array.from({ length: 50 }, (_, i) => ({
+      id: `c${i}`,
+      title: `conv ${i}`,
+      createdAt: i,
+      titleProvisional: false,
+      messages: [msg('user', `m-${i}`, `content of conv ${i}`)],
+    }))
+    streamReplyWith('fifty first assistant reply')
+    const readState = renderChat(fifty, null)
+
+    // Sending from the empty state creates a new conversation.
+    await user.type(screen.getByRole('textbox', { name: t.chat.placeholder }), 'new conversation body')
+    await user.click(screen.getByRole('button', { name: t.send }))
+    // Await the assistant reply (unique text) so the send has fully committed.
+    await screen.findByText('fifty first assistant reply')
+
+    const stored = readState()
+    expect(stored).toHaveLength(51)
+    // The new one is newest-first…
+    expect(stored[0].messages.some((m) => m.content === 'new conversation body')).toBe(true)
+    // …and the OLDEST conversation survived — no silent eviction. Order is
+    // newest-first: the new conversation, then the original seed order.
+    expect(stored.some((c) => c.id === 'c0')).toBe(true)
+    expect(stored[1].id).toBe('c0')
+    expect(stored[50].id).toBe('c49')
+  })
+})
+
 describe('Conversation rename — inline, bilingual, persisted (wave DE)', () => {
   function twoConversations(): Conversation[] {
     return [

@@ -53,8 +53,8 @@ export function NodeField(): React.JSX.Element {
       seed()
     }
 
-    const cyan = 'rgba(62, 224, 230, 0.5)'
-    const violet = 'rgba(143, 123, 247, 0.45)'
+    const violet = 'rgba(139, 109, 255, 0.5)'
+    const blue = 'rgba(94, 146, 255, 0.45)'
 
     const draw = (move: boolean) => {
       ctx.clearRect(0, 0, width, height)
@@ -76,7 +76,7 @@ export function NodeField(): React.JSX.Element {
           const d2 = dx * dx + dy * dy
           if (d2 < maxDist * maxDist) {
             const alpha = (1 - Math.sqrt(d2) / maxDist) * 0.15
-            ctx.strokeStyle = `rgba(120, 150, 200, ${alpha.toFixed(3)})`
+            ctx.strokeStyle = `rgba(126, 132, 224, ${alpha.toFixed(3)})`
             ctx.lineWidth = 1
             ctx.beginPath()
             ctx.moveTo(a.x, a.y)
@@ -86,7 +86,7 @@ export function NodeField(): React.JSX.Element {
         }
       }
       for (const n of nodes) {
-        ctx.fillStyle = n.violet ? violet : cyan
+        ctx.fillStyle = n.violet ? blue : violet
         ctx.beginPath()
         ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2)
         ctx.fill()

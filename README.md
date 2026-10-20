@@ -3,9 +3,10 @@
 **Every question is the start of something new.** — كل سؤال بداية لشيء جديد
 
 ZUNO AI is an original AI-assistant web experience for coding, learning, writing, translating and
-exploring — with its own visual identity: deep graphite surfaces, restrained electric
-cyan / turquoise / violet accents, and a Z-mark logo whose joints end in connection nodes
-(connected intelligence). It is not a copy of any existing assistant platform.
+exploring — with its own visual identity: luxury charcoal surfaces in stepped elevation layers
+(dark-first, warm-paper light theme), restrained electric violet / blue accents, and a Z-mark logo
+whose joints end in connection nodes (connected intelligence). It is not a copy of any existing
+assistant platform. The design system is documented in `docs/DESIGN.md`.
 
 This repository contains both halves of the product: the React **frontend** (deployed to GitHub
 Pages) and the Cloudflare **Worker chat proxy** (`worker/`) that owns the Gemini key. Production

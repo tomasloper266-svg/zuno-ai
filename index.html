@@ -4,14 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
-    <meta name="theme-color" content="#0a0c10" />
+    <!-- App chrome follows the app theme (dark is the default); the media
+         variants let the browser bar match whichever palette is active. -->
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0c10" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f5f2" />
     <meta
       name="description"
       content="ZUNO AI — an AI assistant for coding, learning, writing and exploring. Every question is the start of something new."
     />
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cpath d='M8 9h20L8 27h20' fill='none' stroke='%233ee0e6' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cpath d='M8 9h20L8 27h20' fill='none' stroke='%237c5cff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"
     />
     <!-- PWA: relative URLs only — the app is served from the GitHub Pages
          project subpath (/zuno-ai/), never from the origin root. -->

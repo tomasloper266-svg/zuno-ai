@@ -494,3 +494,74 @@ describe('Offline banner (truthful offline state)', () => {
     expect(banner.textContent).not.toContain(t.chat.offline.title)
   })
 })
+
+describe('Composer limit enforcement (input-box limits from the Worker contract)', () => {
+  const near = 'a'.repeat(3600) // exactly 90% of the 4000-char message limit
+  const over = 'a'.repeat(4001)
+
+  function sendButton(): HTMLButtonElement {
+    return screen.getByRole('button', { name: t.send }) as HTMLButtonElement
+  }
+
+  function draftBox(): HTMLTextAreaElement {
+    return screen.getByRole('textbox', { name: t.chat.placeholder }) as HTMLTextAreaElement
+  }
+
+  it('L1: shows the limit counter near the limit and still sends', async () => {
+    const user = userEvent.setup()
+    streamReplyWith('ok')
+    const readState = renderChat([], null)
+
+    fireEvent.change(draftBox(), { target: { value: near } })
+    const counter = screen.getByText(/in request/)
+    expect(counter.classList.contains('composer-counter')).toBe(true)
+    expect(counter.classList.contains('is-over')).toBe(false)
+    expect(sendButton().hasAttribute('disabled')).toBe(false)
+
+    await user.click(sendButton())
+    // findByText alone can catch the transient streaming delta before the
+    // commit — assert on the settled conversation instead: greeting, the
+    // near-limit user message, and the reply.
+    await waitFor(() => expect(contents(storedMessages(readState))).toEqual([t.chat.greeting, near, 'ok']))
+  })
+
+  it('L2: blocks sending over the message limit with a clear message, never blocks typing', () => {
+    const readState = renderChat([], null)
+    fireEvent.change(draftBox(), { target: { value: over } })
+
+    // The over-limit counter is an alert carrying the plain-language reason.
+    const counter = screen.getByRole('alert')
+    expect(counter.classList.contains('is-over')).toBe(true)
+    expect(counter.textContent).toContain(t.chat.limitExceeded)
+
+    // Send is refused from both paths: the disabled button and the Enter key.
+    expect(sendButton().hasAttribute('disabled')).toBe(true)
+    fireEvent.keyDown(draftBox(), { key: 'Enter', shiftKey: false })
+    expect(storedMessages(readState)).toEqual([])
+    expect(replyMock).not.toHaveBeenCalled()
+
+    // Typing is never prevented — the over-limit draft still accepts input.
+    fireEvent.change(draftBox(), { target: { value: `${over}more` } })
+    expect(draftBox().value.length).toBe(4005)
+    expect(screen.getByRole('alert')).not.toBeNull()
+  })
+
+  it('L3: blocks sending when the request total exceeds its limit even with a short draft', () => {
+    // 7,700 unseeded chars already in the thread + a 400-char draft > 8,000.
+    renderChat(seededConversations([msg('user', 'm1', 'u'.repeat(7700))]))
+    fireEvent.change(draftBox(), { target: { value: 'd'.repeat(400) } })
+
+    const counter = screen.getByRole('alert')
+    expect(counter.textContent).toContain(t.chat.limitExceeded)
+    expect(sendButton().hasAttribute('disabled')).toBe(true)
+    expect(replyMock).not.toHaveBeenCalled()
+  })
+
+  it('L4: a short draft in a short conversation never shows the counter or an alert', () => {
+    renderChat([], null)
+    fireEvent.change(draftBox(), { target: { value: 'hello' } })
+    expect(screen.queryByText(/in request/)).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(sendButton().hasAttribute('disabled')).toBe(false)
+  })
+})

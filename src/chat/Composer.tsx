@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { Strings } from '../i18n/strings'
+import { limitStatus, MAX_MESSAGE_CHARS, MAX_TOTAL_CHARS } from '../lib/limits'
 
 interface ComposerProps {
   t: Strings
@@ -11,10 +12,16 @@ interface ComposerProps {
   /** True while a reply is streaming in: the send button becomes the stop button. */
   streaming: boolean
   onStop: () => void
+  /** Characters the next request would carry besides the draft (the sent thread). */
+  threadChars?: number
 }
 
-export function Composer({ t, value, onChange, onSend, disabled, streaming, onStop }: ComposerProps): React.JSX.Element {
+export function Composer({ t, value, onChange, onSend, disabled, streaming, onStop, threadChars = 0 }: ComposerProps): React.JSX.Element {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  // Input-box enforcement of the Worker's wire limits: counting and feedback
+  // here, never silent truncation — typing is never blocked, only sending.
+  const status = limitStatus(value, threadChars)
+  const over = status.messageOver || status.totalOver
 
   useEffect(() => {
     const el = textareaRef.current
@@ -26,6 +33,9 @@ export function Composer({ t, value, onChange, onSend, disabled, streaming, onSt
   function submit(): void {
     const clean = value.trim()
     if (clean === '' || disabled) return
+    // Over-limit drafts are refused with the visible counter message — never
+    // silently truncated and never sent.
+    if (status.messageOver || status.totalOver) return
     onSend(clean)
   }
 
@@ -52,12 +62,28 @@ export function Composer({ t, value, onChange, onSend, disabled, streaming, onSt
         onKeyDown={onKeyDown}
       />
       <div className="composer-foot">
-        <span className="composer-hint">{t.chat.hint}</span>
+        {/* The counter replaces the hint while active — one compact line, no crowding. */}
+        {(status.nearLimit || over) ? (
+          <span
+            className={`composer-counter${over ? ' is-over' : ''}`}
+            role={over ? 'alert' : undefined}
+            aria-live={over ? undefined : 'polite'}
+          >
+            {t.chat.limitCounter
+              .replace('{message}', String(status.messageChars))
+              .replace('{messageMax}', String(MAX_MESSAGE_CHARS))
+              .replace('{total}', String(status.totalChars))
+              .replace('{totalMax}', String(MAX_TOTAL_CHARS))}
+            {over ? ` — ${t.chat.limitExceeded}` : ''}
+          </span>
+        ) : (
+          <span className="composer-hint">{t.chat.hint}</span>
+        )}
         <button
           type="button"
           className={`composer-send${streaming ? ' is-stop' : ''}`}
           onClick={streaming ? onStop : submit}
-          disabled={!streaming && (disabled || value.trim() === '')}
+          disabled={!streaming && (disabled || value.trim() === '' || over)}
           aria-label={streaming ? t.chat.stopGenerating : t.send}
         >
           {streaming ? (

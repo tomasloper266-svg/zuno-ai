@@ -62,6 +62,10 @@ export interface Strings {
     stopped: string
     /** Badge on a reply whose stream failed midway — its partial text was salvaged. */
     failed: string
+    /** Composer limit gauge, shown at ≥90% of the message/request limits. */
+    limitCounter: string
+    /** Composer error shown when the draft or request total exceeds its limit. */
+    limitExceeded: string
     errors: Record<ChatErrorKind, BannerCopy>
     /** Shown instead of errors.connection when the browser reports being offline. */
     offline: BannerCopy
@@ -138,6 +142,8 @@ export const strings: Record<Lang, Strings> = {
       stopGenerating: 'Stop generating',
       stopped: 'Stopped',
       failed: 'Failed',
+      limitCounter: '{message}/{messageMax} in message · {total}/{totalMax} in request',
+      limitExceeded: 'Over the limit — shorten the message to send.',
       errors: {
         connection: {
           title: 'Something went wrong',
@@ -235,6 +241,8 @@ export const strings: Record<Lang, Strings> = {
       stopGenerating: 'إيقاف التوليد',
       stopped: 'موقوف',
       failed: 'فشل',
+      limitCounter: '{message}/{messageMax} في الرسالة · {total}/{totalMax} في الطلب',
+      limitExceeded: 'تجاوزتَ الحد — قصّر الرسالة قبل الإرسال.',
       errors: {
         connection: {
           title: 'حدث خطأ ما',

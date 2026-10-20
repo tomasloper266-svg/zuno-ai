@@ -3,7 +3,8 @@ import type { Dispatch, SetStateAction } from 'react'
 import type { Conversation, Message } from '../types'
 import { uid } from '../lib/util'
 import { renderMarkdown } from '../lib/markdown'
-import { recentMessagesForRequest, IS_DEMO, streamAssistantReply, ChatRequestError } from '../lib/engine'
+import { recentMessagesForRequest, IS_DEMO, SENT_MESSAGE_LIMIT, streamAssistantReply, ChatRequestError } from '../lib/engine'
+import { MAX_MESSAGE_CHARS } from '../lib/limits'
 import type { ChatErrorKind, ThreadMessage } from '../lib/engine'
 import { applyDerivedTitle } from '../lib/title'
 import { requestSmartTitle } from '../lib/smartTitle'
@@ -321,6 +322,7 @@ export function Chat({
   async function send(text: string): Promise<void> {
     const clean = text.trim()
     if (clean === '' || pending || inFlightRef.current) return
+    if (clean.length > MAX_MESSAGE_CHARS) return // the composer counter explains; never send over-limit
     justSentRef.current = true
     const now = Date.now()
     const userMessage: Message = { id: uid(), role: 'user', content: clean, ts: now }
@@ -387,6 +389,15 @@ export function Chat({
   }
 
   const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 820 : false
+
+  // Characters the next request would carry besides the draft (same filter +
+  // slice as the real thread) — the composer's request-total gauge.
+  const threadCharCount =
+    conversation === null
+      ? 0
+      : toThread(conversation.messages)
+          .slice(-SENT_MESSAGE_LIMIT)
+          .reduce((sum, m) => sum + m.content.length, 0)
 
   return (
     <div className="chat">
@@ -546,6 +557,7 @@ export function Chat({
             disabled={pending}
             streaming={pending}
             onStop={stopGenerating}
+            threadChars={threadCharCount}
           />
           {!IS_DEMO && (
             <p className="privacy-note" dir="auto">

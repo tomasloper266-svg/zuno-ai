@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import type { Conversation } from '../types'
 import { conversationToText } from '../lib/conversationText'
 import { conversationToJson, conversationToMarkdown, downloadTextFile, exportFilename } from '../lib/conversationExport'
 import { copyText } from '../lib/util'
+import { useMenuFocus } from '../hooks/useMenuFocus'
 import type { Strings } from '../i18n/strings'
 
 interface ConversationActionsProps {
@@ -15,30 +16,21 @@ interface ConversationActionsProps {
 
 /**
  * Header menu for conversation-level actions (rename, copy, export): one
- * kebab button plus a small popover, closed by outside click or Escape.
+ * kebab button plus a small popover, with full menu focus management
+ * (useMenuFocus): opening focuses the first item, arrows cycle, Escape/Tab
+ * close and re-anchor focus on the kebab button, outside click closes.
  * Renders nothing when there is no conversation to act on.
  */
 export function ConversationActions({ t, conversation, onRename }: ConversationActionsProps): React.JSX.Element | null {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
-  const rootRef = useRef<HTMLDivElement>(null)
+  const { rootRef, buttonRef, menuRef } = useMenuFocus(open, closeMenu)
 
-  // Outside click and Escape close the open menu (listeners only while open).
-  useEffect(() => {
-    if (!open) return
-    function onPointerDown(e: PointerEvent): void {
-      if (rootRef.current !== null && !rootRef.current.contains(e.target as Node)) setOpen(false)
-    }
-    function onKeyDown(e: KeyboardEvent): void {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('pointerdown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
-    }
-  }, [open])
+  /** Close the menu; a refocusing close re-anchors on the kebab button. */
+  function closeMenu(refocusButton: boolean): void {
+    setOpen(false)
+    if (refocusButton) buttonRef.current?.focus()
+  }
 
   if (conversation === null || conversation.messages.length === 0) return null
 
@@ -46,7 +38,7 @@ export function ConversationActions({ t, conversation, onRename }: ConversationA
     if (conversation === null) return
     const ok = await copyText(conversationToText(conversation, t.chat.you))
     if (ok) {
-      setOpen(false)
+      closeMenu(true)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1600)
     }
@@ -59,18 +51,19 @@ export function ConversationActions({ t, conversation, onRename }: ConversationA
     } else {
       downloadTextFile(exportFilename(conversation, 'json'), conversationToJson(conversation), 'application/json')
     }
-    setOpen(false)
+    closeMenu(true)
   }
 
   return (
     <div className="conv-actions" ref={rootRef}>
       <button
         type="button"
+        ref={buttonRef}
         className={`icon-btn${copied ? ' copied' : ''}`}
         aria-label={copied ? t.chat.copied : t.chat.conversationActions}
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? closeMenu(true) : setOpen(true))}
       >
         {copied ? (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
@@ -85,13 +78,16 @@ export function ConversationActions({ t, conversation, onRename }: ConversationA
         )}
       </button>
       {open && (
-        <div className="conv-menu" role="menu" aria-label={t.chat.conversationActions}>
+        <div className="conv-menu" role="menu" aria-label={t.chat.conversationActions} ref={menuRef}>
           {onRename && (
             <button
               type="button"
               role="menuitem"
+              tabIndex={-1}
               onClick={() => {
-                setOpen(false)
+                // Refocus first, then hand over: the inline editor's autoFocus
+                // (mounted by onRename in the same commit) wins from here.
+                closeMenu(true)
                 onRename()
               }}
             >
@@ -101,21 +97,21 @@ export function ConversationActions({ t, conversation, onRename }: ConversationA
               {t.chat.rename}
             </button>
           )}
-          <button type="button" role="menuitem" onClick={() => void handleCopy()}>
+          <button type="button" role="menuitem" tabIndex={-1} onClick={() => void handleCopy()}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
               <rect x="9" y="9" width="11" height="11" rx="2.5" />
               <path d="M5.5 14.5A2 2 0 014 12.6V6a2 2 0 012-2h6.6a2 2 0 011.9 1.5" strokeLinecap="round" />
             </svg>
             {t.chat.copyConversation}
           </button>
-          <button type="button" role="menuitem" onClick={() => handleExport('md')}>
+          <button type="button" role="menuitem" tabIndex={-1} onClick={() => handleExport('md')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
               <path d="M12 4v11M7.5 10.5L12 15l4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
               <path d="M5 19h14" strokeLinecap="round" />
             </svg>
             {t.chat.exportMarkdown}
           </button>
-          <button type="button" role="menuitem" onClick={() => handleExport('json')}>
+          <button type="button" role="menuitem" tabIndex={-1} onClick={() => handleExport('json')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
               <path d="M12 4v11M7.5 10.5L12 15l4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
               <path d="M5 19h14" strokeLinecap="round" />

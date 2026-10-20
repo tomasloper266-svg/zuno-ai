@@ -7,6 +7,7 @@ import {
   hashIp,
   MINUTE_LIMIT,
   minuteWindowStart,
+  titleLimiterKey,
 } from "../src/ratelimit"
 import { resetDb } from "./schema"
 
@@ -99,5 +100,24 @@ describe("checkRateLimit", () => {
     for (const row of rows.results as Array<{ ip_hash: string }>) {
       expect(row.ip_hash).toMatch(/^[0-9a-f]{64}$/)
     }
+  })
+})
+
+describe("titleLimiterKey", () => {
+  it("namespaces the title bucket away from the chat bucket, still a pure hash", async () => {
+    const ipHash = await hashIp("203.0.113.9")
+    const titleKey = await titleLimiterKey(ipHash)
+    expect(titleKey).not.toBe(ipHash)
+    // Re-hashing keeps every stored key a pure SHA-256 digest — never a raw IP.
+    expect(titleKey).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  it("keeps title counters independent of chat counters", async () => {
+    const ipHash = await hashIp("203.0.113.10")
+    const titleKey = await titleLimiterKey(ipHash)
+    for (let i = 0; i < MINUTE_LIMIT; i++) await checkRateLimit(env.DB, titleKey, NOW_MS)
+    expect((await checkRateLimit(env.DB, titleKey, NOW_MS)).allowed).toBe(false)
+    // Exhausting the title bucket leaves the chat bucket for the same IP fresh.
+    expect((await checkRateLimit(env.DB, ipHash, NOW_MS)).allowed).toBe(true)
   })
 })

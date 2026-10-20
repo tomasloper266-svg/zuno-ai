@@ -1,4 +1,5 @@
 import type { Env } from "./env"
+import { UpstreamError, type ProviderAdapter } from "./providers/types"
 
 export type ErrorCode =
   | "invalid_request"
@@ -99,6 +100,33 @@ export function jsonResponse(body: unknown, status: number, allowedOrigin: strin
     status,
     headers: { ...corsHeadersFor(allowedOrigin), "Content-Type": "application/json" },
   })
+}
+
+/** Map an adapter failure to the standard JSON error envelope — the shared
+ * tail of every endpoint that calls a provider (pre-stream failures only). */
+export function upstreamErrorResponse(
+  error: unknown,
+  adapter: ProviderAdapter,
+  requestId: string,
+  allowedOrigin: string | null,
+): Response {
+  if (error instanceof UpstreamError) {
+    logEvent("error", "upstream_failure", {
+      requestId,
+      code: error.code,
+      upstreamStatus: error.upstreamStatus,
+      adapter: adapter.name,
+    })
+    return errorResponse(error.code, {
+      allowedOrigin,
+      retryAfterSeconds: error.retryAfterSeconds,
+    })
+  }
+  logEvent("error", "adapter_crashed", {
+    requestId,
+    message: error instanceof Error ? error.message : String(error),
+  })
+  return errorResponse("upstream_error", { allowedOrigin })
 }
 
 /** Structured server-side log line: event name and ids — never secrets, never upstream bodies. */

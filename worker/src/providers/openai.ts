@@ -23,6 +23,7 @@ function openaiBody(input: AdapterInput, env: Env, stream: boolean): unknown {
       ...input.turns.map((turn) => ({ role: turn.role, content: turn.content })),
     ],
     max_tokens: input.maxOutputTokens,
+    ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
     ...(stream ? { stream: true } : {}),
   }
 }

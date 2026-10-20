@@ -6,6 +6,11 @@ export interface AdapterInput {
   system: string
   turns: ChatTurn[]
   maxOutputTokens: number
+  /**
+   * Sampling temperature — omitted for /chat (provider default) and set low
+   * for /title, where a deterministic, tightly-scoped reply is the point.
+   */
+  temperature?: number
 }
 
 export interface AdapterSuccess {

@@ -154,6 +154,24 @@ describe("gemini adapter", () => {
       .catch((e: unknown) => e)
     expect((error as UpstreamError).code).toBe("config_error")
   })
+
+  it("sends temperature only when the input sets it (low for /title)", async () => {
+    const withTemp = stubFetch({
+      status: 200,
+      body: JSON.stringify({ candidates: [{ content: { parts: [{ text: "t" }] } }] }),
+    })
+    await new GeminiAdapter().generate({ ...input, temperature: 0.2 }, env)
+    const tempBody = JSON.parse(withTemp.body) as { generationConfig: { temperature?: number } }
+    expect(tempBody.generationConfig.temperature).toBe(0.2)
+
+    const withoutTemp = stubFetch({
+      status: 200,
+      body: JSON.stringify({ candidates: [{ content: { parts: [{ text: "t" }] } }] }),
+    })
+    await new GeminiAdapter().generate(input, env)
+    const plainBody = JSON.parse(withoutTemp.body) as { generationConfig: { temperature?: number } }
+    expect("temperature" in plainBody.generationConfig).toBe(false)
+  })
 })
 
 describe("openai-compatible adapter", () => {
@@ -191,6 +209,24 @@ describe("openai-compatible adapter", () => {
       .catch((e: unknown) => e)
     expect(error).toBeInstanceOf(UpstreamError)
     expect((error as UpstreamError).code).toBe("rate_limited")
+  })
+
+  it("omits temperature unless the input sets it (low for /title)", async () => {
+    const withTemp = stubFetch({
+      status: 200,
+      body: JSON.stringify({ choices: [{ message: { content: "t" } }] }),
+    })
+    await new OpenAIAdapter().generate({ ...input, temperature: 0.2 }, env)
+    const tempBody = JSON.parse(withTemp.body) as { temperature?: number }
+    expect(tempBody.temperature).toBe(0.2)
+
+    const withoutTemp = stubFetch({
+      status: 200,
+      body: JSON.stringify({ choices: [{ message: { content: "t" } }] }),
+    })
+    await new OpenAIAdapter().generate(input, env)
+    const plainBody = JSON.parse(withoutTemp.body) as { temperature?: number }
+    expect("temperature" in plainBody).toBe(false)
   })
 })
 

@@ -29,6 +29,19 @@ export async function hashIp(ip: string): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")
 }
 
+/**
+ * Independent limiter key for the /title bucket, derived from the chat key.
+ *
+ * The D1 schema pins the `window` values with a CHECK constraint
+ * ('minute' | 'day') and the deploy workflow applies no migrations, so buckets
+ * are separated by namespacing the KEY instead of adding window names.
+ * Re-hashing the already-hashed IP keeps every stored key a pure SHA-256 hex
+ * digest — the raw IP is never stored in any form.
+ */
+export async function titleLimiterKey(ipHash: string): Promise<string> {
+  return hashIp(`${ipHash}:title`)
+}
+
 export interface RateDecision {
   allowed: boolean
   /** Defined only when blocked: seconds until the binding window resets. */

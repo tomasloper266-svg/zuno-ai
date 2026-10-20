@@ -1,5 +1,11 @@
 import type { Env } from "./env"
-import { corsHeadersFor, errorResponse, jsonResponse, logEvent } from "./http"
+import {
+  corsHeadersFor,
+  errorResponse,
+  jsonResponse,
+  logEvent,
+  upstreamErrorResponse,
+} from "./http"
 import { LIMITS, validateChatBody } from "./validate"
 import { resolveAdapter } from "./providers/factory"
 import { SYSTEM_PROMPT } from "./prompt"
@@ -80,7 +86,7 @@ export async function handleChat(
     const success = await adapter.generate(input, env)
     return jsonResponse({ reply: success.reply }, 200, allowedOrigin)
   } catch (error) {
-    return upstreamFailure(error, adapter, requestId, allowedOrigin)
+    return upstreamErrorResponse(error, adapter, requestId, allowedOrigin)
   }
 }
 
@@ -109,7 +115,7 @@ async function handleStreamingChat(
   } catch (error) {
     // Pre-flight failure — no SSE bytes sent yet, so the client still gets the
     // standard JSON envelope with the honest status (429, 502, 503, 500…).
-    return upstreamFailure(error, adapter, requestId, allowedOrigin)
+    return upstreamErrorResponse(error, adapter, requestId, allowedOrigin)
   }
 
   const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
@@ -176,32 +182,6 @@ function sseHeaders(allowedOrigin: string | null): Record<string, string> {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache",
   }
-}
-
-/** Map an adapter failure to the standard JSON error envelope (pre-stream only). */
-function upstreamFailure(
-  error: unknown,
-  adapter: ProviderAdapter,
-  requestId: string,
-  allowedOrigin: string | null,
-): Response {
-  if (error instanceof UpstreamError) {
-    logEvent("error", "upstream_failure", {
-      requestId,
-      code: error.code,
-      upstreamStatus: error.upstreamStatus,
-      adapter: adapter.name,
-    })
-    return errorResponse(error.code, {
-      allowedOrigin,
-      retryAfterSeconds: error.retryAfterSeconds,
-    })
-  }
-  logEvent("error", "adapter_crashed", {
-    requestId,
-    message: error instanceof Error ? error.message : String(error),
-  })
-  return errorResponse("upstream_error", { allowedOrigin })
 }
 
 /** Invalid requests share one client-visible code; the reason is logged only. */

@@ -20,6 +20,14 @@ Content-Type: application/json
 ```
 
 ```
+POST /title
+Content-Type: application/json
+{ "user": "<first user message>", "assistant": "<first assistant reply, optional>" }
+
+→ 200 { "title": "..." }   — a 3–6 word title in the user's language
+```
+
+```
 GET /health → 200 { "ok": true }
 ```
 
@@ -57,6 +65,28 @@ data: {"reason":"stop"}
 - A client that sent `stream: true` to a backend predating this flag still gets
   a JSON `200 { reply }` and falls back to a single delta (`src/lib/engine.ts`).
 
+## Conversation titles (POST /title)
+
+ChatGPT-style titles: the frontend calls `/title` **once per conversation** after the
+first exchange commits. The body carries the first user message (`user`, required,
+≤2000 chars) and the first assistant reply (`assistant`, optional, ≤1000 chars);
+the body is capped at 4 KiB before parsing. CORS, the error envelope, and the
+provider adapter stack are exactly the ones `/chat` uses.
+
+- The system prompt is strict: a 3–6 word title in the user's language, no quotes,
+  no surrounding punctuation, no prefixes like "Conversation about" / "محادثة عن".
+  `maxOutputTokens: 24`, temperature `0.2`.
+- The reply is sanitized server-side (wrapping quotes and trailing periods
+  stripped, hard-capped at 80 code points on a word boundary). A whitespace-only
+  model reply is a provider failure (`502 upstream_error`), not an empty success —
+  the client keeps its local heuristic title on any failure, silently.
+- Rate limiting uses an **independent bucket**: same windows and limits as
+  `/chat` (10/min, 60/day) but keyed separately (`titleLimiterKey`), so title
+  traffic never consumes chat quota and vice versa. The D1 schema pins the
+  `window` values with a CHECK constraint and deploys apply no migrations, so
+  the bucket is separated by namespacing the key (a re-hash of the IP hash) —
+  every stored key is still a pure SHA-256 digest.
+
 ## Error envelope
 
 Clients only ever see `{ "error": { "code" } }`. Details (request id, upstream
@@ -77,7 +107,9 @@ Per client IP (`CF-Connecting-IP`, stored only as a SHA-256 hash), backed by
 the D1 binding `DB`: **10 requests/minute** and **60 requests/day** (UTC
 windows, both incremented per request; blocked requests count too, so retry
 floods stay locked out). Over limit → `429` with `Retry-After` (seconds until
-the binding window resets). Schema lives in `migrations/0001_rate_limits.sql`;
+the binding window resets). `/title` runs on an independent bucket keyed
+separately from `/chat` (see "Conversation titles" above). Schema lives in
+`migrations/0001_rate_limits.sql`;
 the test suite applies the same DDL from `test/schema.ts` — keep the two in
 sync if you ever change the table.
 
@@ -114,6 +146,7 @@ worker/
   src/
     index.ts             # routing, CORS, error envelope
     chat.ts              # POST /chat pipeline: validate → resolve provider → rate limit → generate
+    title.ts             # POST /title pipeline: validate → own rate-limit bucket → generate → sanitize
     validate.ts          # strict body validation
     prompt.ts            # fixed system prompt
     ratelimit.ts         # D1 counters, SHA-256 IP hashing

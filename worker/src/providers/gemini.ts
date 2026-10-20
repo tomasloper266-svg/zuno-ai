@@ -20,7 +20,10 @@ function geminiBody(input: AdapterInput): unknown {
       role: turn.role === "assistant" ? "model" : "user",
       parts: [{ text: turn.content }],
     })),
-    generationConfig: { maxOutputTokens: input.maxOutputTokens },
+    generationConfig: {
+      maxOutputTokens: input.maxOutputTokens,
+      ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
+    },
   }
 }
 

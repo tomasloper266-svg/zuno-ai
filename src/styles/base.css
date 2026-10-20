@@ -30,6 +30,9 @@ body {
 
 html[lang='ar'] body {
   font-family: var(--font-arabic);
+  /* Arabic script reads comfortably with taller leading; negative tracking
+     (used on Latin display type) must never apply to connected Arabic glyphs. */
+  line-height: 1.85;
 }
 
 button,

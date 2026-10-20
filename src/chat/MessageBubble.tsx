@@ -29,7 +29,10 @@ export function MessageBubble({ message, t, isLastAssistant, onRegenerate }: Mes
         {isUser ? t.chat.you.charAt(0) : <ZunoLogo size={20} />}
       </span>
       <div className="bubble-col">
-        <div className={`bubble ${message.role}`} dir="auto">
+        {/* is-latest marks the newest assistant reply — the CSS completion-pulse
+            hook (zuno-complete). isLastAssistant is only true for assistant
+            messages, so user bubbles never carry it. */}
+        <div className={`bubble ${message.role}${isLastAssistant ? ' is-latest' : ''}`} dir="auto">
           {isUser ? message.content : renderMarkdown(message.content)}
         </div>
         <div className="bubble-meta">

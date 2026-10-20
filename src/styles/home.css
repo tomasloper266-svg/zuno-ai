@@ -1,4 +1,5 @@
-/* soft accent glow behind the hero */
+/* soft accent glow behind the hero — a slow gradient wash, drifting like
+   ambient light (reduced-motion users get the static frame via base.css). */
 .home-hero::before {
   content: "";
   position: absolute;
@@ -6,17 +7,36 @@
   left: 50%;
   width: min(820px, 92vw);
   height: 400px;
-  transform: translateX(-50%);
+  /* Centering via the standalone `translate` property (the glow is a symmetric,
+     direction-agnostic decoration): it composes with the animated `transform`
+     below instead of fighting it — keyframes only drift ±1.5% around center. */
+  translate: -50% 0;
   background:
-    radial-gradient(42% 55% at 50% 42%, rgba(62, 224, 230, 0.09), transparent 70%),
-    radial-gradient(36% 50% at 62% 56%, rgba(143, 123, 247, 0.07), transparent 72%);
-  filter: blur(12px);
+    radial-gradient(42% 55% at 32% 42%, rgba(62, 224, 230, 0.11), transparent 70%),
+    radial-gradient(38% 52% at 68% 56%, rgba(143, 123, 247, 0.09), transparent 72%),
+    radial-gradient(30% 42% at 54% 30%, rgba(47, 212, 189, 0.08), transparent 75%);
+  filter: blur(16px);
   z-index: -1;
   pointer-events: none;
+  animation: zuno-hero-wash 16s ease-in-out infinite alternate;
 }
 
-/* staggered entrance (neutralized by prefers-reduced-motion via base.css) */
-@keyframes zuno-rise {
+@keyframes zuno-hero-wash {
+  from {
+    transform: translate3d(-1.5%, 1.5%, 0) scale(1);
+    opacity: 0.8;
+  }
+  to {
+    transform: translate3d(1.5%, -2%, 0) scale(1.07);
+    opacity: 1;
+  }
+}
+
+/* staggered entrance (neutralized by prefers-reduced-motion via base.css).
+   Keyframes are named zuno-home-rise: chat.css owns .jump-latest's own
+   keyframes — the two must never share a name, since the later-loaded file's
+   @keyframes would silently win for BOTH files' animations. */
+@keyframes zuno-home-rise {
   from {
     opacity: 0;
     transform: translateY(10px);
@@ -31,7 +51,7 @@
 .home-sub,
 .home-input,
 .entries {
-  animation: zuno-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: zuno-home-rise 0.55s var(--ease-out-soft) backwards;
 }
 .home-hero h1 {
   animation-delay: 60ms;
@@ -180,12 +200,11 @@
   backdrop-filter: blur(8px);
   border: 1px solid var(--border-strong);
   border-radius: 999px;
-  padding: 8px 8px 8px 22px;
+  /* Logical: text sits at inline-start, send button hugs inline-end — mirrors in RTL. */
+  padding-block: 8px;
+  padding-inline: 22px 8px;
   box-shadow: var(--shadow-1);
   transition: border-color var(--speed) ease, box-shadow var(--speed) ease;
-}
-html[dir='rtl'] .home-input {
-  padding: 8px 22px 8px 8px;
 }
 .home-input:focus-within {
   border-color: var(--accent);
@@ -224,10 +243,27 @@ html[dir='rtl'] .home-input {
 }
 .home-send:active {
   transform: scale(0.95);
+  filter: brightness(0.96);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.18);
+  /* fast press-in, var(--speed) release — the classic tactile button */
+  transition-duration: 70ms;
 }
 .home-send svg {
   width: 18px;
   height: 18px;
+}
+
+/* Arabic-first display metrics: connected script needs taller leading and no
+   negative tracking (letter-spacing breaks Arabic glyph joining). */
+html[lang='ar'] .home-hero h1 {
+  line-height: 1.34;
+  letter-spacing: 0;
+}
+html[lang='ar'] .home-sub {
+  line-height: 2;
+}
+html[lang='ar'] .entry-card span {
+  line-height: 1.8;
 }
 
 .entries {

@@ -7,6 +7,22 @@
   grid-template-rows: minmax(0, 1fr);
   height: 100dvh;
   overflow: hidden;
+  /* Home → chat transition: the chat view rises in softly on mount (the home
+     hero staggers back in on return). The mobile fixed sidebar is unaffected:
+     during the brief transform its containing block is .chat itself, which
+     already covers the viewport. */
+  animation: zuno-view-in var(--speed-slow) var(--ease-out-soft) backwards;
+}
+
+@keyframes zuno-view-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.997);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* ---------- Sidebar ---------- */
@@ -109,16 +125,15 @@
   flex: 1;
   min-width: 0;
   text-align: start;
-  padding: 9px 8px 9px 10px;
+  /* logical: label hugs inline-start, delete affordance side gets the small gap */
+  padding-block: 9px;
+  padding-inline: 10px 8px;
   font-size: 13.5px;
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   border-radius: var(--radius-sm);
-}
-html[dir='rtl'] .conversation-item .conv-btn {
-  padding: 9px 10px 9px 8px;
 }
 .conversation-item.active .conv-btn,
 .conversation-item .conv-btn:hover {
@@ -315,6 +330,22 @@ html[dir='rtl'] .conversation-item .conv-btn {
   gap: 10px;
   align-items: flex-end;
   max-width: 100%;
+  /* Motion language: every message rises in once as it mounts (React keys keep
+     existing rows' DOM nodes stable, so this never replays on re-render).
+     translateY is direction-agnostic — identical in RTL. Disabled for
+     prefers-reduced-motion users by the global rule in base.css. */
+  animation: zuno-msg-in var(--msg-enter) var(--ease-out-soft) backwards;
+}
+
+@keyframes zuno-msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 .bubble-row.user {
   flex-direction: row-reverse;
@@ -363,15 +394,36 @@ html[dir='rtl'] .conversation-item .conv-btn {
   box-shadow: var(--bubble-shadow);
 }
 .bubble.assistant {
-  background: var(--surface);
+  /* Whisper-gradient surface: a touch of bg-soft at the top gives the bubble
+     depth without a visible seam; layered elevation comes from --bubble-shadow. */
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 92%, var(--bg-soft)), var(--surface) 58%);
   border: 1px solid var(--border);
   border-start-start-radius: 6px;
 }
 .bubble.user {
-  background: var(--accent-soft);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 15%, transparent), var(--accent-soft));
   border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
   border-start-end-radius: 6px;
   white-space: pre-wrap;
+}
+/* Completion pulse: the newest assistant reply carries .is-latest (MessageBubble
+   derives it from Chat's existing isLastAssistant prop). It plays ONCE on mount —
+   which is exactly when the reply arrives — as a soft accent ring expanding out.
+   A calmer accent-tinted border stays as the "newest reply" affordance. */
+.bubble.assistant.is-latest {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  animation: zuno-complete 1100ms var(--ease-out-soft) 80ms backwards;
+}
+@keyframes zuno-complete {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 35%, transparent), var(--bubble-shadow);
+  }
+  65% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 0%, transparent), var(--bubble-shadow);
+  }
+  100% {
+    box-shadow: var(--bubble-shadow);
+  }
 }
 .bubble p {
   margin: 0 0 8px;
@@ -446,10 +498,11 @@ html[dir='rtl'] .conversation-item .conv-btn {
   padding: 14px 16px;
 }
 .typing span {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
-  background: var(--text-faint);
+  /* accent-gradient dots — the assistant "breathes" in the brand colors */
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
   animation: zuno-typing 1.1s infinite ease-in-out;
 }
 .typing span:nth-child(2) {
@@ -509,12 +562,11 @@ html[dir='rtl'] .conversation-item .conv-btn {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px 8px 6px 14px;
+  /* logical: language tag at inline-start, copy button at inline-end */
+  padding-block: 6px;
+  padding-inline: 14px 8px;
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface) 60%, transparent);
-}
-html[dir='rtl'] .code-block-header {
-  padding: 6px 14px 6px 8px;
 }
 .code-lang {
   font-family: var(--font-mono);
@@ -614,7 +666,7 @@ html[dir='rtl'] .code-block-header {
   font-weight: 600;
   white-space: nowrap;
   box-shadow: var(--shadow-1);
-  animation: zuno-rise var(--speed) ease;
+  animation: zuno-jump-rise var(--speed) var(--ease-out-soft);
   transition: border-color var(--speed) ease, color var(--speed) ease;
 }
 .jump-latest:hover {
@@ -625,7 +677,10 @@ html[dir='rtl'] .code-block-header {
   width: 14px;
   height: 14px;
 }
-@keyframes zuno-rise {
+/* Owns its own name (zuno-jump-rise): home.css's entrance keyframes must never
+   collide with this one — with a shared name, the later-loaded file's @keyframes
+   silently won for BOTH files (that bug skewed the home hero entrance sideways). */
+@keyframes zuno-jump-rise {
   from {
     opacity: 0;
     transform: translate(-50%, 6px);
@@ -712,7 +767,11 @@ html[dir='rtl'] .code-block-header {
   box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 .composer-send:active:not(:disabled) {
-  transform: scale(0.95);
+  transform: scale(0.93);
+  filter: brightness(0.96);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.2);
+  /* fast press-in, var(--speed) release — the classic tactile button */
+  transition-duration: 70ms;
 }
 .composer-send:disabled {
   opacity: 0.45;
@@ -721,6 +780,26 @@ html[dir='rtl'] .code-block-header {
 .composer-send svg {
   width: 16px;
   height: 16px;
+}
+
+/* ---------- Arabic-first chat metrics ---------- */
+/* IBM Plex Sans Arabic sets taller; comfortable Arabic needs bigger optical
+   size and looser leading than Inter at the same hierarchy level. */
+html[lang='ar'] .bubble {
+  font-size: 15px;
+  line-height: 1.95;
+}
+html[lang='ar'] .bubble.user {
+  line-height: 1.9;
+}
+html[lang='ar'] .composer textarea {
+  line-height: 1.85;
+}
+html[lang='ar'] .chat-empty h2 {
+  line-height: 1.5;
+}
+html[lang='ar'] .chat-empty p {
+  line-height: 1.95;
 }
 
 /* ---------- Mobile ---------- */

@@ -39,4 +39,12 @@ export interface Conversation {
    * upgrades the title too.
    */
   titleProvisional?: boolean
+  /**
+   * True when the user manually renamed the conversation — automatic titling
+   * (the heuristic applyDerivedTitle and the smart /title reply) must never
+   * overwrite a manual title. Absent on conversations stored before this
+   * field existed: treated as not-manual, the same backward-compat rule as
+   * `titleProvisional`.
+   */
+  titleManual?: boolean
 }

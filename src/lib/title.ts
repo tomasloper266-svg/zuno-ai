@@ -9,6 +9,10 @@ import type { Conversation } from '../types'
 const MAX_TITLE_CHARS = 48
 const ELLIPSIS = '…'
 
+/** Manual titles cap at this many code points (a loose, generous length —
+ * the composer keeps model titles shorter). */
+export const RENAME_MAX_CHARS = 60
+
 /**
  * Derive a conversation title from a user message: collapse whitespace, keep
  * whole words, and append an ellipsis when the text was cut. A word-boundary
@@ -37,14 +41,28 @@ export function deriveTitle(raw: string): string {
 }
 
 /**
+ * Normalize a manually-entered title: collapse whitespace, then cap at
+ * RENAME_MAX_CHARS code points — never splitting a surrogate pair (emoji,
+ * rare scripts), and never appending an ellipsis: a manual title is the
+ * user's own text, kept verbatim up to the cap. Pure. Returns '' for empty
+ * or whitespace-only input — the caller cancels the rename.
+ */
+export function capRenameTitle(raw: string): string {
+  const text = raw.replace(/\s+/g, ' ').trim()
+  if ([...text].length <= RENAME_MAX_CHARS) return text
+  return [...text].slice(0, RENAME_MAX_CHARS).join('')
+}
+
+/**
  * Swap the creation-time provisional title for the heuristic one once the
  * first reply has committed. Conversations already finalized pass through
  * unchanged; conversations stored before `titleProvisional` existed have the
  * field undefined — treated as provisional, so their next completed reply
- * upgrades the title too. Pure.
+ * upgrades the title too. A manually-renamed conversation (`titleManual`)
+ * is never re-titled — the user's word outranks every automatic title. Pure.
  */
 export function applyDerivedTitle(conv: Conversation): Conversation {
-  if (conv.titleProvisional === false) return conv
+  if (conv.titleManual === true || conv.titleProvisional === false) return conv
   const firstUserMessage = conv.messages.find((m) => m.role === 'user')
   const derived = deriveTitle(firstUserMessage?.content ?? '')
   if (derived === '') return conv

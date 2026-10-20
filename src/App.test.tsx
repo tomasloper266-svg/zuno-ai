@@ -4,7 +4,7 @@
  * with the sidebar search focused — and the URL parameter is consumed so a
  * reload never re-triggers the action. No action means the home screen. */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import App from './App'
 import { strings } from './i18n/strings'
 import type { Conversation } from './types'
@@ -93,5 +93,32 @@ describe('PWA launcher deep links', () => {
 
     expect(screen.queryByPlaceholderText(t.chat.searchPlaceholder)).toBeNull()
     expect(window.location.search).toBe('?action=bogus')
+  })
+})
+
+describe('Conversation rename persistence (wave DE)', () => {
+  it('a rename updates the sidebar immediately and survives a page reload', () => {
+    window.localStorage.setItem('zuno.conversations.v1', JSON.stringify([conversation()]))
+    window.history.replaceState(null, '', '/?action=search')
+    render(<App />)
+
+    // Rename through the real actions menu → inline editor → Enter.
+    fireEvent.click(screen.getByRole('button', { name: t.chat.conversationActions }))
+    fireEvent.click(screen.getByRole('menuitem', { name: t.chat.rename }))
+    const input = screen.getByRole('textbox', { name: t.chat.renameLabel }) as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'اسمي الخاص' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(screen.getByRole('button', { name: 'اسمي الخاص' })).toBeTruthy()
+
+    // Simulate a reload: fresh mount over the same localStorage.
+    cleanup()
+    window.history.replaceState(null, '', '/?action=search')
+    render(<App />)
+    expect(screen.getByRole('button', { name: 'اسمي الخاص' })).toBeTruthy()
+
+    // The stored payload carries the manual pin so the smart title stands down.
+    const stored = JSON.parse(window.localStorage.getItem('zuno.conversations.v1') ?? '[]') as Conversation[]
+    expect(stored[0]?.title).toBe('اسمي الخاص')
+    expect(stored[0]?.titleManual).toBe(true)
   })
 })

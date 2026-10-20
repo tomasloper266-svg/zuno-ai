@@ -8,14 +8,17 @@ import type { Strings } from '../i18n/strings'
 interface ConversationActionsProps {
   t: Strings
   conversation: Conversation | null
+  /** Start an inline rename of this conversation in the sidebar. Omit when
+   * renaming is unavailable — the menu item then does not render. */
+  onRename?: () => void
 }
 
 /**
- * Header menu for conversation-level actions (copy, later export): one kebab
- * button plus a small popover, closed by outside click or Escape. Renders
- * nothing when there is no conversation to act on.
+ * Header menu for conversation-level actions (rename, copy, export): one
+ * kebab button plus a small popover, closed by outside click or Escape.
+ * Renders nothing when there is no conversation to act on.
  */
-export function ConversationActions({ t, conversation }: ConversationActionsProps): React.JSX.Element | null {
+export function ConversationActions({ t, conversation, onRename }: ConversationActionsProps): React.JSX.Element | null {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -83,6 +86,21 @@ export function ConversationActions({ t, conversation }: ConversationActionsProp
       </button>
       {open && (
         <div className="conv-menu" role="menu" aria-label={t.chat.conversationActions}>
+          {onRename && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false)
+                onRename()
+              }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                <path d="M4 20h4L19.5 8.5a2.1 2.1 0 00-3-3L5 17v3z" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {t.chat.rename}
+            </button>
+          )}
           <button type="button" role="menuitem" onClick={() => void handleCopy()}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
               <rect x="9" y="9" width="11" height="11" rx="2.5" />

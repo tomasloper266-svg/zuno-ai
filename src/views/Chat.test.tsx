@@ -25,6 +25,11 @@ vi.mock('../lib/engine', async (importOriginal) => {
   return { ...actual, streamAssistantReply: vi.fn() }
 })
 
+vi.mock('../lib/conversationExport', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/conversationExport')>()
+  return { ...actual, downloadTextFile: vi.fn() }
+})
+
 const t = strings.en
 const replyMock = vi.mocked(streamAssistantReply)
 
@@ -806,5 +811,147 @@ describe('Conversation deletion — confirmed, never silent (wave DE)', () => {
     const composer = screen.getByRole('textbox', { name: t.chat.placeholder }) as HTMLTextAreaElement
     fireEvent.change(composer, { target: { value: 'next message' } })
     expect((screen.getByRole('button', { name: t.send }) as HTMLButtonElement).hasAttribute('disabled')).toBe(false)
+  })
+})
+
+describe('Conversation rename — inline, bilingual, persisted (wave DE)', () => {
+  function twoConversations(): Conversation[] {
+    return [
+      { id: 'conv-1', title: 'first', createdAt: 1, titleProvisional: false, messages: [msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'first reply')] },
+      { id: 'conv-2', title: 'second', createdAt: 2, titleProvisional: false, messages: [msg('user', 'n1', 'other conversation')] },
+    ]
+  }
+
+  function openActionsMenu(): void {
+    fireEvent.click(screen.getByRole('button', { name: t.chat.conversationActions }))
+  }
+
+  function pickRename(): void {
+    fireEvent.click(screen.getByRole('menuitem', { name: t.chat.rename }))
+  }
+
+  function renameInput(): HTMLInputElement {
+    return screen.getByRole('textbox', { name: t.chat.renameLabel }) as HTMLInputElement
+  }
+
+  function renameTo(value: string, settle: 'Enter' | 'Escape' | 'blur' = 'Enter'): void {
+    openActionsMenu()
+    pickRename()
+    const input = renameInput()
+    fireEvent.change(input, { target: { value } })
+    if (settle === 'Enter') fireEvent.keyDown(input, { key: 'Enter' })
+    else if (settle === 'Escape') fireEvent.keyDown(input, { key: 'Escape' })
+    else fireEvent.blur(input)
+  }
+
+  it('R1: the menu item opens an inline editor pre-filled with the current title', () => {
+    renderChat(twoConversations())
+
+    openActionsMenu()
+    pickRename()
+
+    const input = renameInput()
+    expect(input.value).toBe('first')
+    expect(input.getAttribute('dir')).toBe('auto')
+    // The editor replaces the title button in place; its delete button is hidden.
+    expect(screen.queryByRole('button', { name: 'first' })).toBeNull()
+    expect(screen.getAllByRole('button', { name: t.chat.delete })).toHaveLength(1)
+  })
+
+  it('R2: Enter commits an English rename — sidebar and state update, title pinned manual', () => {
+    const readState = renderChat(twoConversations())
+
+    renameTo('Project plan')
+
+    expect(screen.queryByRole('textbox', { name: t.chat.renameLabel })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Project plan' })).not.toBeNull()
+    const stored = readState()[0]
+    expect(stored.title).toBe('Project plan')
+    expect(stored.titleManual).toBe(true)
+    expect(stored.titleProvisional).toBe(false)
+    // The other conversation is untouched.
+    expect(readState()[1].title).toBe('second')
+  })
+
+  it('R3: an Arabic rename commits and keeps per-text direction via dir=auto', () => {
+    const readState = renderChat(twoConversations())
+
+    renameTo('خطة المشروع')
+
+    expect(screen.getByRole('button', { name: 'خطة المشروع' })).not.toBeNull()
+    expect(readState()[0].title).toBe('خطة المشروع')
+    expect(readState()[0].titleManual).toBe(true)
+  })
+
+  it('R4: Escape cancels — the title stands, nothing is pinned', () => {
+    const readState = renderChat(twoConversations())
+
+    renameTo('should not apply', 'Escape')
+
+    expect(screen.queryByRole('textbox', { name: t.chat.renameLabel })).toBeNull()
+    expect(screen.getByRole('button', { name: 'first' })).not.toBeNull()
+    expect(readState()[0].title).toBe('first')
+    expect(readState()[0].titleManual).toBeUndefined()
+  })
+
+  it('R5: blur commits a changed title', () => {
+    const readState = renderChat(twoConversations())
+
+    renameTo('blurred rename', 'blur')
+
+    expect(readState()[0].title).toBe('blurred rename')
+    expect(readState()[0].titleManual).toBe(true)
+  })
+
+  it('R6: an empty (whitespace-only) title cancels instead of saving', () => {
+    const readState = renderChat(twoConversations())
+
+    renameTo('   ')
+
+    expect(readState()[0].title).toBe('first')
+    expect(readState()[0].titleManual).toBeUndefined()
+  })
+
+  it('R7: an unchanged title is not pinned as manual', () => {
+    const readState = renderChat(twoConversations())
+
+    renameTo('first')
+
+    expect(readState()[0].title).toBe('first')
+    expect(readState()[0].titleManual).toBeUndefined()
+  })
+
+  it('R8: a title beyond 60 code points is capped without splitting pairs', () => {
+    const readState = renderChat(twoConversations())
+    const long = 'و'.repeat(65) + '🔥'.repeat(65)
+
+    renameTo(long)
+
+    const stored = readState()[0].title
+    expect([...stored].length).toBe(60)
+    expect(stored.endsWith('…')).toBe(false)
+    // Only whole characters — a split surrogate pair would fail this regex.
+    expect(/^و*🔥*$/u.test(stored)).toBe(true)
+  })
+
+  it('R9: exports use the renamed title — Markdown heading and JSON body (integration)', async () => {
+    const { downloadTextFile } = await import('../lib/conversationExport')
+    const downloadMock = vi.mocked(downloadTextFile)
+    renderChat(twoConversations())
+
+    renameTo('خطة المشروع')
+
+    openActionsMenu()
+    fireEvent.click(screen.getByRole('menuitem', { name: t.chat.exportMarkdown }))
+    expect(downloadMock).toHaveBeenCalledTimes(1)
+    const [mdName, mdContent] = downloadMock.mock.calls[0]
+    expect(mdName).toBe('خطة-المشروع.md')
+    expect(mdContent.startsWith('# خطة المشروع')).toBe(true)
+
+    openActionsMenu()
+    fireEvent.click(screen.getByRole('menuitem', { name: t.chat.exportJson }))
+    const [jsonName, jsonContent] = downloadMock.mock.calls[1]
+    expect(jsonName).toBe('خطة-المشروع.json')
+    expect((JSON.parse(jsonContent) as { title: string }).title).toBe('خطة المشروع')
   })
 })

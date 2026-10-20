@@ -8,7 +8,7 @@
  * import edge, so the trigger/cancel/attempt bookkeeping under test stays real. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useState } from 'react'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Chat } from './Chat'
 import { streamAssistantReply } from '../lib/engine'
@@ -178,5 +178,39 @@ describe('Chat smart-title wiring', () => {
     await user.click(other)
 
     await waitFor(() => expect(captured.signal?.aborted).toBe(true))
+  })
+
+  it('a manual rename outranks the smart title arriving later', async () => {
+    streamReplyWith('Here is the answer')
+    // The smart-title response is held until the test resolves it — the user
+    // renames while the request is in flight.
+    const holder: { resolve: ((value: string | null) => void) | null } = { resolve: null }
+    titleMock.mockImplementation(
+      () =>
+        new Promise<string | null>((resolve) => {
+          holder.resolve = resolve
+        }),
+    )
+    const readState = renderChat(seededConversations([]))
+
+    await send('Explain async await')
+    await screen.findByText('Here is the answer')
+    await waitFor(() => expect(titleMock).toHaveBeenCalledTimes(1))
+
+    // Rename while the smart-title request is in flight: open the actions
+    // menu, pick Rename, type the new title, press Enter.
+    fireEvent.click(screen.getByRole('button', { name: t.chat.conversationActions }))
+    fireEvent.click(screen.getByRole('menuitem', { name: t.chat.rename }))
+    const input = screen.getByRole('textbox', { name: t.chat.renameLabel }) as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'اسمي الخاص' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(readState()[0].title).toBe('اسمي الخاص')
+    expect(readState()[0].titleManual).toBe(true)
+
+    // The in-flight smart title now lands — and must be discarded.
+    holder.resolve?.('Smart Title From Worker')
+    await waitFor(() => expect(readState()[0].title).toBe('اسمي الخاص'))
+    expect(readState()[0].titleManual).toBe(true)
+    expect(readState()[0].titleProvisional).toBe(false)
   })
 })

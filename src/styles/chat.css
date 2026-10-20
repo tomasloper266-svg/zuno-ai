@@ -1048,3 +1048,20 @@ html[lang='ar'] .chat-empty p {
 .dialog-actions button.danger:hover {
   background: color-mix(in srgb, var(--danger) 85%, #000);
 }
+
+/* ---------- Inline conversation rename ---------- */
+/* The editor replaces the title button in place — same row footprint, per-text
+   direction via dir="auto" (RTL/LTR follows the content). */
+.conversation-item .conv-rename {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13.5px;
+}
+.conversation-item .conv-rename:focus-visible {
+  outline-offset: 0;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyDerivedTitle, deriveTitle } from './title'
+import { applyDerivedTitle, capRenameTitle, deriveTitle, RENAME_MAX_CHARS } from './title'
 import type { Conversation, Message } from '../types'
 
 function userMessage(content: string): Message {
@@ -59,6 +59,33 @@ describe('deriveTitle', () => {
   })
 })
 
+describe('capRenameTitle (manual rename)', () => {
+  it('keeps a short Arabic title verbatim, with whitespace collapsed', () => {
+    expect(capRenameTitle('  خطة\tتعلّم  البرمجة ')).toBe('خطة تعلّم البرمجة')
+  })
+
+  it('caps at 60 code points without appending an ellipsis', () => {
+    const long = 'شرح مفصّل لكيفية عمل الذاكرة المؤقتة في المتصفحات وتأثيرها على الأداء العام'
+    const capped = capRenameTitle(long)
+    expect([...capped].length).toBeLessThanOrEqual(RENAME_MAX_CHARS)
+    expect(capped.endsWith('…')).toBe(false)
+    expect(long.startsWith(capped)).toBe(true)
+  })
+
+  it('never splits a surrogate pair when capping (emoji count as one code point)', () => {
+    const emojiTitle = '🔥'.repeat(70)
+    const capped = capRenameTitle(emojiTitle)
+    expect([...capped].length).toBe(RENAME_MAX_CHARS)
+    // Every kept character is a full emoji — no lone halves.
+    expect(capped.replace(/🔥/gu, '')).toBe('')
+  })
+
+  it('returns empty for empty or whitespace-only input — the caller cancels', () => {
+    expect(capRenameTitle('')).toBe('')
+    expect(capRenameTitle('   \n  ')).toBe('')
+  })
+})
+
 describe('applyDerivedTitle', () => {
   function provisionalConv(firstUserContent: string, titleProvisional?: boolean): Conversation {
     return {
@@ -90,5 +117,12 @@ describe('applyDerivedTitle', () => {
   it('leaves an already-finalized conversation unchanged (same object)', () => {
     const conv: Conversation = { ...provisionalConv('Short question'), title: 'kept', titleProvisional: false }
     expect(applyDerivedTitle(conv)).toBe(conv)
+  })
+
+  it('never re-titles a manually-renamed conversation', () => {
+    const conv: Conversation = { ...provisionalConv('Long question that would derive a different title'), title: 'اسمي الخاص', titleProvisional: false, titleManual: true }
+    const retitled = applyDerivedTitle(conv)
+    expect(retitled.title).toBe('اسمي الخاص')
+    expect(retitled.titleProvisional).toBe(false)
   })
 })

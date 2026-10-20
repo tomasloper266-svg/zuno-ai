@@ -6,7 +6,7 @@ import { renderMarkdown } from '../lib/markdown'
 import { recentMessagesForRequest, IS_DEMO, SENT_MESSAGE_LIMIT, streamAssistantReply, ChatRequestError } from '../lib/engine'
 import { MAX_MESSAGE_CHARS } from '../lib/limits'
 import type { ChatErrorKind, ThreadMessage } from '../lib/engine'
-import { applyDerivedTitle } from '../lib/title'
+import { applyDerivedTitle, capRenameTitle } from '../lib/title'
 import { requestSmartTitle } from '../lib/smartTitle'
 import { Sidebar } from '../chat/Sidebar'
 import { ConfirmDeleteDialog } from '../chat/ConfirmDeleteDialog'
@@ -217,6 +217,28 @@ export function Chat({
     closeDeleteDialog()
   }
 
+  // Inline rename: the kebab menu's "Rename" item turns the sidebar row's
+  // title into an input (Commit = Enter or blur, Cancel = Escape).
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+
+  function startRename(id: string): void {
+    setRenamingId(id)
+    // On a narrow screen the sidebar is collapsed — the inline editor must be
+    // visible for the edit to be understandable.
+    if (sidebarCollapsed) setSidebarCollapsed(false)
+  }
+
+  function commitRename(id: string, raw: string): void {
+    setRenamingId(null)
+    // An empty title is not a title — cancel instead of saving it.
+    const title = capRenameTitle(raw)
+    if (title === '') return
+    // A manual rename is pinned: titleProvisional:false finalizes the local
+    // title and titleManual:true bars every automatic title (heuristic and
+    // smart) from ever overwriting the user's word.
+    upsertConversation(id, (conv) => ({ ...conv, title, titleProvisional: false, titleManual: true }))
+  }
+
   function upsertConversation(convId: string, updater: (conv: Conversation) => Conversation): void {
     setConversations((prev) => prev.map((c) => (c.id === convId ? updater(c) : c)))
   }
@@ -234,7 +256,11 @@ export function Chat({
     void requestSmartTitle({ user: firstUser, assistant: firstAssistant }, controller.signal).then(
       (title) => {
         if (title === null || controller.signal.aborted) return
-        upsertConversation(convId, (conv) => ({ ...conv, title, titleProvisional: false }))
+        // A manual rename (titleManual) outranks the smart title — it may
+        // land while the request is in flight, so the response is discarded.
+        upsertConversation(convId, (conv) =>
+          conv.titleManual === true ? conv : { ...conv, title, titleProvisional: false },
+        )
       },
     )
   }
@@ -463,6 +489,9 @@ export function Chat({
           if (isMobile) setSidebarCollapsed(true)
         }}
         onDelete={requestDelete}
+        renamingId={renamingId}
+        onRenameCommit={commitRename}
+        onRenameCancel={() => setRenamingId(null)}
         onHome={onHome}
       />
 
@@ -483,7 +512,11 @@ export function Chat({
             <Brand compact />
           </button>
           <span className="header-spacer" />
-          <ConversationActions t={t} conversation={conversation} />
+          <ConversationActions
+            t={t}
+            conversation={conversation}
+            onRename={conversation === null ? undefined : () => startRename(conversation.id)}
+          />
           {IS_DEMO && (
             <span className="demo-badge" title={t.chat.demoNote}>
               <span className="dot" />

@@ -74,6 +74,9 @@ export interface Strings {
     deleteConfirmTitle: string
     deleteConfirmBody: string
     deleteConfirmAction: string
+    /** Inline rename (from the actions menu): the menu item and the editor's aria-label. */
+    rename: string
+    renameLabel: string
     delete: string
     you: string
     jumpToLatest: string
@@ -179,6 +182,8 @@ export const strings: Record<Lang, Strings> = {
       deleteConfirmTitle: 'Delete this conversation permanently?',
       deleteConfirmBody: 'The conversation and all its messages will be permanently removed from this browser. This cannot be undone.',
       deleteConfirmAction: 'Delete permanently',
+      rename: 'Rename',
+      renameLabel: 'Conversation title',
       delete: 'Delete conversation',
       you: 'You',
       jumpToLatest: 'Jump to latest',
@@ -282,6 +287,8 @@ export const strings: Record<Lang, Strings> = {
       deleteConfirmTitle: 'حذف المحادثة نهائياً؟',
       deleteConfirmBody: 'ستُحذف المحادثة وكل رسائلها نهائياً من هذا المتصفح، ولا يمكن التراجع عن ذلك.',
       deleteConfirmAction: 'حذف نهائي',
+      rename: 'إعادة تسمية',
+      renameLabel: 'عنوان المحادثة',
       delete: 'حذف المحادثة',
       you: 'أنت',
       jumpToLatest: 'انتقل إلى الأحدث',

@@ -15,7 +15,8 @@ export interface ThreadMessage {
   content: string
 }
 
-const API_BASE = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, '') ?? ''
+/** Base URL of the chat API ("" in demo mode). Shared by /chat and /title. */
+export const API_BASE = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, '') ?? ''
 
 export const IS_DEMO = API_BASE === ''
 

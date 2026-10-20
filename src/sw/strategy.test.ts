@@ -46,6 +46,17 @@ describe('cacheStrategyFor — the API/SSE never-cached rule', () => {
     ).toBe('passthrough')
   })
 
+  it('passes POST /title through like /chat — smart titles always hit the network', () => {
+    // The smart-title request must never be intercepted or cached, exactly
+    // like chat traffic (worker origin and same-origin defense in depth).
+    expect(cacheStrategyFor(facts({ method: 'POST', url: 'https://zuno-worker.workers.dev/title' }))).toBe(
+      'passthrough',
+    )
+    expect(cacheStrategyFor(facts({ method: 'POST', url: 'https://owner.github.io/zuno-ai/title' }))).toBe(
+      'passthrough',
+    )
+  })
+
   it('never mistakes an asset filename for the chat endpoint (and vice versa)', () => {
     expect(isChatApiPath('/zuno-ai/assets/chat-proxy-Ab12cd34.js')).toBe(false)
     expect(isChatApiPath('/chat')).toBe(true)

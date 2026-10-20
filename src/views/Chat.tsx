@@ -6,6 +6,7 @@ import { renderMarkdown } from '../lib/markdown'
 import { recentMessagesForRequest, IS_DEMO, streamAssistantReply, ChatRequestError } from '../lib/engine'
 import type { ChatErrorKind, ThreadMessage } from '../lib/engine'
 import { applyDerivedTitle } from '../lib/title'
+import { requestSmartTitle } from '../lib/smartTitle'
 import { Sidebar } from '../chat/Sidebar'
 import { MessageBubble } from '../chat/MessageBubble'
 import { ConversationActions } from '../chat/ConversationActions'
@@ -75,6 +76,13 @@ export function Chat({
   // future non-standard path) can never start a second chat request.
   const inFlightRef = useRef(false)
 
+  // Smart title (ChatGPT-style): at most ONE /title attempt per conversation,
+  // ever — ref-tracked so a retry/regenerate of the first exchange can never
+  // re-fire it. The controller is the in-flight request's cancel handle
+  // (aborted on conversation switch / new chat / leaving the view).
+  const smartTitleAttemptedRef = useRef<Set<string>>(new Set())
+  const smartTitleAbortRef = useRef<AbortController | null>(null)
+
   // Stick-to-bottom auto-follow: track whether the reader is near the bottom
   // (direction-independent scrollTop math — identical in LTR and RTL).
   const atBottomRef = useRef(true)
@@ -134,6 +142,16 @@ export function Chat({
     setContextTrimmed(false)
   }, [activeConvId])
 
+  // Switching conversations (or starting a new one, or leaving the view)
+  // cancels the in-flight smart-title request of the conversation being left —
+  // the local title stands; the silent feature never speaks across
+  // conversation boundaries.
+  useEffect(() => {
+    return () => {
+      smartTitleAbortRef.current?.abort()
+    }
+  }, [activeConvId])
+
   // The search deep link must reach a visible sidebar: on a narrow screen the
   // sidebar mounts collapsed, so expand it before the focus lands.
   useEffect(() => {
@@ -169,6 +187,24 @@ export function Chat({
     setConversations((prev) => prev.map((c) => (c.id === convId ? updater(c) : c)))
   }
 
+  /** Fire the one-shot smart-title request for `convId`. At most one attempt
+   * per conversation (smartTitleAttemptedRef); on success the model title
+   * replaces the heuristic one and is pinned (titleProvisional=false); on any
+   * failure, timeout, or cancel nothing changes and nothing is shown — a
+   * silent feature. */
+  function requestSmartTitleFor(convId: string, firstUser: string, firstAssistant: string): void {
+    if (smartTitleAttemptedRef.current.has(convId)) return
+    smartTitleAttemptedRef.current.add(convId)
+    const controller = new AbortController()
+    smartTitleAbortRef.current = controller
+    void requestSmartTitle({ user: firstUser, assistant: firstAssistant }, controller.signal).then(
+      (title) => {
+        if (title === null || controller.signal.aborted) return
+        upsertConversation(convId, (conv) => ({ ...conv, title, titleProvisional: false }))
+      },
+    )
+  }
+
   function toThread(items: Message[]): ThreadMessage[] {
     // The seeded greeting is app-authored display copy, not a model turn —
     // it never enters the thread (which also keeps threads user-first).
@@ -194,6 +230,10 @@ export function Chat({
     // text mirrors the accumulated stream server-side — the final committed
     // message content never reads React state back.
     let text = ''
+    // True when the reply about to be committed is the conversation's FIRST —
+    // exactly the moment the smart title is generated (once per conversation;
+    // a retry of a failed first exchange still counts as the first reply).
+    const isFirstReply = !thread.some((m) => m.role === 'assistant')
     const controller = new AbortController()
     abortRef.current = controller
     try {
@@ -220,6 +260,13 @@ export function Chat({
         upsertConversation(convId, (conv) =>
           applyDerivedTitle({ ...conv, messages: [...conv.messages, assistantMessage] }),
         )
+        if (isFirstReply) {
+          // ChatGPT-style: generate the smart title from the first exchange
+          // (first user message + this reply). Fire-and-forget — on any
+          // failure the local title stands silently.
+          const firstUser = thread.find((m) => m.role === 'user')?.content ?? ''
+          requestSmartTitleFor(convId, firstUser, text)
+        }
       } else if (outcome === 'completed') {
         // The stream finished but carried no reply text at all.
         setErrorKind('service')

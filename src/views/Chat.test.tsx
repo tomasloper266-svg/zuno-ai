@@ -379,3 +379,53 @@ describe('Chat streaming + stop behavior', () => {
     expect(screen.queryByRole('button', { name: t.chat.stopGenerating })).toBeNull()
   })
 })
+
+describe('Offline banner (truthful offline state)', () => {
+  /** jsdom exposes onLine as a getter — swap it per test and always restore. */
+  function setOnline(online: boolean): void {
+    Object.defineProperty(window.navigator, 'onLine', { value: online, configurable: true })
+  }
+
+  afterEach(() => {
+    // Remove the per-test override so the original jsdom getter shows through.
+    delete (window.navigator as { onLine?: boolean }).onLine
+  })
+
+  it('shows the dedicated offline copy when a connection failure happens while the browser is offline', async () => {
+    setOnline(false)
+    replyMock.mockRejectedValueOnce(new ChatRequestError('connection', 'network down'))
+    renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'first reply')]))
+
+    fireEvent.click(regenerateButton())
+    const banner = await screen.findByRole('alert')
+
+    expect(banner.textContent).toContain(t.chat.offline.title)
+    expect(banner.textContent).toContain(t.chat.offline.body)
+    // The generic connection copy would undersell the state — absent here.
+    expect(banner.textContent).not.toContain(t.chat.errors.connection.title)
+  })
+
+  it('shows the generic connection copy for the same failure while the browser reports online', async () => {
+    setOnline(true)
+    replyMock.mockRejectedValueOnce(new ChatRequestError('connection', 'network error'))
+    renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'first reply')]))
+
+    fireEvent.click(regenerateButton())
+    const banner = await screen.findByRole('alert')
+
+    expect(banner.textContent).toContain(t.chat.errors.connection.title)
+    expect(banner.textContent).not.toContain(t.chat.offline.title)
+  })
+
+  it('never claims offline for engine-classified failures (quota, service)', async () => {
+    setOnline(false) // offline at failure time — yet the failure is not a network failure
+    replyMock.mockRejectedValueOnce(new ChatRequestError('daily_limit', 'quota exhausted'))
+    renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'first reply')]))
+
+    fireEvent.click(regenerateButton())
+    const banner = await screen.findByRole('alert')
+
+    expect(banner.textContent).toContain(t.chat.errors.daily_limit.title)
+    expect(banner.textContent).not.toContain(t.chat.offline.title)
+  })
+})

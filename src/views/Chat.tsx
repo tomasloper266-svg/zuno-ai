@@ -51,6 +51,9 @@ export function Chat({
   )
   const [pending, setPending] = useState(false)
   const [errorKind, setErrorKind] = useState<ChatErrorKind | null>(null)
+  // Snapshot taken at the moment the request failed — the banner must tell the
+  // truth about the failure, not about wherever connectivity stands now.
+  const [offlineAtError, setOfflineAtError] = useState(false)
   const [contextTrimmed, setContextTrimmed] = useState(false)
   const [draft, setDraft] = useState('')
   // The reply being streamed in: accumulated text plus the conversation it
@@ -77,6 +80,15 @@ export function Chat({
 
   const messages = conversation?.messages ?? []
   const activeConvId = conversation?.id ?? null
+
+  // Banner copy: offline failure gets its own truthful message — the generic
+  // connection copy would undersell what happened.
+  const bannerCopy =
+    errorKind === null
+      ? null
+      : errorKind === 'connection' && offlineAtError
+        ? t.chat.offline
+        : t.chat.errors[errorKind]
 
   useEffect(() => {
     if (seedPrompt !== '') {
@@ -112,6 +124,7 @@ export function Chat({
   // banner does — switching conversations or starting a new chat clears both.
   useEffect(() => {
     setErrorKind(null)
+    setOfflineAtError(false)
     setContextTrimmed(false)
   }, [activeConvId])
 
@@ -159,6 +172,7 @@ export function Chat({
     inFlightRef.current = true
     setPending(true)
     setErrorKind(null)
+    setOfflineAtError(false)
     setStreamText('')
     setStreamingConvId(convId)
     // Request-time trim only: the stored history keeps every message — just the
@@ -202,6 +216,7 @@ export function Chat({
       // Only genuine network failures carry kind 'connection' — every other path
       // (quota, burst, service fault) is classified by the engine and told truthfully.
       setErrorKind(err instanceof ChatRequestError ? err.kind : 'service')
+      setOfflineAtError(typeof navigator !== 'undefined' && !navigator.onLine)
     } finally {
       abortRef.current = null // released even on error, so retry stays usable
       inFlightRef.current = false
@@ -369,10 +384,10 @@ export function Chat({
                   onRegenerate={regenerate}
                 />
               ))}
-              {errorKind !== null && (
+              {bannerCopy !== null && (
                 <div className="chat-error" role="alert">
                   <span>
-                    {t.chat.errors[errorKind].title} — {t.chat.errors[errorKind].body}
+                    {bannerCopy.title} — {bannerCopy.body}
                   </span>
                   <button type="button" onClick={retry} disabled={pending}>
                     {t.chat.retry}

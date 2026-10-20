@@ -59,6 +59,8 @@ export interface Strings {
     /** Stop button shown while a reply is streaming in. */
     stopGenerating: string
     errors: Record<ChatErrorKind, BannerCopy>
+    /** Shown instead of errors.connection when the browser reports being offline. */
+    offline: BannerCopy
     delete: string
     you: string
     jumpToLatest: string
@@ -152,6 +154,10 @@ export const strings: Record<Lang, Strings> = {
           body: 'The request was rejected as invalid — a message may be too long. Try shortening it or starting a new chat.',
         },
       },
+      offline: {
+        title: "You're offline",
+        body: 'No internet connection right now. Your conversations stay saved on this device — reconnect to send messages to the AI.',
+      },
       delete: 'Delete conversation',
       you: 'You',
       jumpToLatest: 'Jump to latest',
@@ -242,6 +248,10 @@ export const strings: Record<Lang, Strings> = {
           title: 'طلب غير صالح',
           body: 'تم رفض الطلب لأنه غير صالح — قد تكون إحدى الرسائل أطول من الحد المسموح. جرّب اختصارها أو بدء محادثة جديدة.',
         },
+      },
+      offline: {
+        title: 'أنت غير متصل',
+        body: 'لا يوجد اتصال بالإنترنت الآن. تبقى محادثاتك محفوظة على هذا الجهاز — أعد الاتصال لإرسال الرسائل إلى الذكاء الاصطناعي.',
       },
       delete: 'حذف المحادثة',
       you: 'أنت',

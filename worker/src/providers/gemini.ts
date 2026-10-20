@@ -50,9 +50,14 @@ async function* geminiDeltas(body: ReadableStream<Uint8Array>): AsyncGenerator<s
 export class GeminiAdapter implements ProviderAdapter {
   readonly name = "gemini"
 
-  async generate(input: AdapterInput, env: Env): Promise<AdapterSuccess> {
+  async generate(input: AdapterInput, env: Env, signal?: AbortSignal): Promise<AdapterSuccess> {
     const { apiKey, url } = geminiConfig(env)
-    const response = await postJsonToProvider(url, { "x-goog-api-key": apiKey }, geminiBody(input))
+    const response = await postJsonToProvider(
+      url,
+      { "x-goog-api-key": apiKey },
+      geminiBody(input),
+      signal,
+    )
 
     return extractReply(response, "gemini", (raw) => {
       const data = raw as GeminiResponse

@@ -53,7 +53,7 @@ async function* openaiDeltas(body: ReadableStream<Uint8Array>): AsyncGenerator<s
 export class OpenAIAdapter implements ProviderAdapter {
   readonly name = "openai"
 
-  async generate(input: AdapterInput, env: Env): Promise<AdapterSuccess> {
+  async generate(input: AdapterInput, env: Env, signal?: AbortSignal): Promise<AdapterSuccess> {
     if (!env.AI_API_KEY || !env.AI_MODEL) {
       throw new UpstreamError("config_error", "openai adapter requires AI_API_KEY and AI_MODEL", {
         status: 500,
@@ -64,6 +64,7 @@ export class OpenAIAdapter implements ProviderAdapter {
       `${base}/chat/completions`,
       { Authorization: `Bearer ${env.AI_API_KEY}` },
       openaiBody(input, env, false),
+      signal,
     )
 
     return extractReply(response, "openai", (raw) => {

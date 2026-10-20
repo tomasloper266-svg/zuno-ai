@@ -7,6 +7,7 @@ export type ErrorCode =
   | "upstream_error"
   | "over_capacity"
   | "config_error"
+  | "provider_timeout"
 
 export const STATUS_BY_CODE: Record<ErrorCode, number> = {
   invalid_request: 400,
@@ -14,6 +15,7 @@ export const STATUS_BY_CODE: Record<ErrorCode, number> = {
   upstream_error: 502,
   over_capacity: 503,
   config_error: 500,
+  provider_timeout: 504,
 }
 
 /** Origins still allowed when ALLOWED_ORIGINS is unset — the two production frontends. */

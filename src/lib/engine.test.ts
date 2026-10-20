@@ -5,7 +5,8 @@ import type { ThreadMessage } from './engine'
 // backend URL BEFORE importing it, so the live fetch path (not demo mode) runs.
 vi.stubEnv('VITE_API_URL', 'https://api.example.test')
 
-const { getAssistantReply, streamAssistantReply, recentMessagesForRequest, ChatRequestError } = await import('./engine')
+const { getAssistantReply, streamAssistantReply, recentMessagesForRequest, ChatRequestError, STREAM_WATCHDOG_MS } =
+  await import('./engine')
 
 /** The instance type of the dynamically imported ChatRequestError class value. */
 type ChatRequestErrorInstance = InstanceType<typeof ChatRequestError>
@@ -148,7 +149,9 @@ describe('streamAssistantReply (live, SSE)', () => {
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toBe('https://api.example.test/chat')
     expect(JSON.parse(String(init.body))).toEqual({ messages: thread, stream: true })
-    expect(init.signal).toBe(controller.signal)
+    // The fetch rides the engine's internal signal (caller abort + watchdog merged);
+    // forwarding is pinned by the dedicated test below.
+    expect(init.signal).toBeDefined()
   })
 
   it('emits nothing for a delta with an empty or malformed payload but keeps streaming', async () => {
@@ -262,5 +265,127 @@ describe('streamAssistantReply (live, SSE)', () => {
 
     await expect(pending).resolves.toBe('aborted')
     expect(seen).toEqual(['first '])
+  })
+})
+
+describe('streamAssistantReply — stall watchdog (auto-cancel on silence)', () => {
+  const WATCHDOG_MS = 50
+  const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
+  /** Mock fetch with an SSE stream that emits the given events, then hangs
+   * until the fetch init signal aborts — which errors the body, mirroring
+   * real fetch abort semantics (the pending read rejects). */
+  function stubStalledSse(...events: Array<{ event: string; data: unknown }>): ReturnType<typeof vi.fn> {
+    const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const signal = init?.signal as AbortSignal
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            const encoder = new TextEncoder()
+            for (const e of events) {
+              controller.enqueue(encoder.encode(`event: ${e.event}\ndata: ${JSON.stringify(e.data)}\n\n`))
+            }
+            signal.addEventListener('abort', () => controller.error(new Error('stream aborted')), { once: true })
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    return fetchMock
+  }
+
+  it('auto-cancels a stalled stream after the watchdog window and resolves watchdog with the partials', async () => {
+    stubStalledSse({ event: 'delta', data: { text: 'partial ' } })
+    const seen: string[] = []
+    await expect(
+      streamAssistantReply(threadOf(3), (t) => seen.push(t), new AbortController().signal, {
+        watchdogMs: WATCHDOG_MS,
+      }),
+    ).resolves.toBe('watchdog')
+    expect(seen).toEqual(['partial '])
+  })
+
+  it('stops emitting deltas after the watchdog auto-cancel (no updates post-cancel)', async () => {
+    stubStalledSse({ event: 'delta', data: { text: 'before' } })
+    const seen: string[] = []
+    await expect(
+      streamAssistantReply(threadOf(3), (t) => seen.push(t), new AbortController().signal, {
+        watchdogMs: WATCHDOG_MS,
+      }),
+    ).resolves.toBe('watchdog')
+    expect(seen).toEqual(['before'])
+    // The body stream errored on cancel, so nothing can emit afterwards — give
+    // any stray timer tick a chance to prove it.
+    await wait(WATCHDOG_MS)
+    expect(seen).toEqual(['before'])
+  })
+
+  it('covers a hung response head — resolves watchdog with zero deltas', async () => {
+    const fetchMock = vi.fn((_url: unknown, init?: RequestInit) => {
+      const signal = (init?.signal as AbortSignal) ?? new AbortController().signal
+      return new Promise<Response>((_, reject) => {
+        signal.addEventListener('abort', () => reject(new Error('request aborted')), { once: true })
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const seen: string[] = []
+    await expect(
+      streamAssistantReply(threadOf(3), (t) => seen.push(t), new AbortController().signal, {
+        watchdogMs: WATCHDOG_MS,
+      }),
+    ).resolves.toBe('watchdog')
+    expect(seen).toEqual([])
+  })
+
+  it('a stream that stalls briefly but keeps flowing completes normally (watchdog rearms)', async () => {
+    const fetchMock = vi.fn(async () => {
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          controller.enqueue(encoder.encode(`event: delta\ndata: ${JSON.stringify({ text: 'slow start' })}\n\n`))
+          await new Promise((r) => setTimeout(r, 20)) // silent gap, inside the window
+          controller.enqueue(encoder.encode(`event: delta\ndata: ${JSON.stringify({ text: ' then more' })}\n\n`))
+          controller.enqueue(encoder.encode(`event: done\ndata: ${JSON.stringify({ reason: 'stop' })}\n\n`))
+          controller.close()
+        },
+      })
+      return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const seen: string[] = []
+    await expect(
+      streamAssistantReply(threadOf(3), (t) => seen.push(t), new AbortController().signal, {
+        watchdogMs: WATCHDOG_MS,
+      }),
+    ).resolves.toBe('completed')
+    expect(seen).toEqual(['slow start', ' then more'])
+  })
+
+  it('forwards the caller’s abort onto the fetch signal (stop kills the upstream request)', async () => {
+    const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const signal = (init?.signal as AbortSignal) ?? new AbortController().signal
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            signal.addEventListener('abort', () => controller.error(new Error('aborted')), { once: true })
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const controller = new AbortController()
+    const pending = streamAssistantReply(threadOf(3), () => {}, controller.signal)
+    await wait(5)
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
+    expect(init?.signal).toBeDefined()
+    controller.abort()
+    expect((init?.signal as AbortSignal).aborted).toBe(true)
+    await expect(pending).resolves.toBe('aborted')
+  })
+
+  it('the production watchdog is the documented 30s', () => {
+    expect(STREAM_WATCHDOG_MS).toBe(30_000)
   })
 })

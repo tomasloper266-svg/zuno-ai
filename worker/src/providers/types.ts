@@ -36,7 +36,12 @@ export interface AdapterStream {
 /** A chat-completion provider behind the /chat endpoint. No tool/function calling. */
 export interface ProviderAdapter {
   readonly name: string
-  generate(input: AdapterInput, env: import("../env").Env): Promise<AdapterSuccess>
+  /**
+   * `signal` (optional) is the caller's deadline/client-disconnect signal —
+   * it must ride on the provider fetch so a timed-out or abandoned call is
+   * cancelled upstream, not left to burn quota in the background.
+   */
+  generate(input: AdapterInput, env: import("../env").Env, signal?: AbortSignal): Promise<AdapterSuccess>
   /**
    * Open a streaming completion. Throws UpstreamError while the provider is
    * still pre-flight (request rejected, body missing) — after that point the

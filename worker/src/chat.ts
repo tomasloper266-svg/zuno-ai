@@ -17,6 +17,7 @@ import {
   type ProviderAdapter,
 } from "./providers/types"
 import { checkRateLimit, hashIp } from "./ratelimit"
+import { PROVIDER_TIMEOUT_MS, providerDeadline, type ProviderDeadline } from "./providers/timeout"
 
 /**
  * POST /chat — validate, pick the provider, return { reply } — or, when the
@@ -82,12 +83,40 @@ export async function handleChat(
     return handleStreamingChat(request, adapter, input, env, requestId, allowedOrigin)
   }
 
+  // One deadline over the whole provider interaction: the client's disconnect
+  // is forwarded as an external abort (a gone caller stops burning provider
+  // quota), and the timer caps a frozen provider.
+  const deadline = providerDeadline(PROVIDER_TIMEOUT_MS, request.signal)
+  let success: Awaited<ReturnType<ProviderAdapter["generate"]>>
   try {
-    const success = await adapter.generate(input, env)
-    return jsonResponse({ reply: success.reply }, 200, allowedOrigin)
+    success = await adapter.generate(input, env, deadline.signal)
   } catch (error) {
+    deadline.dispose()
+    if (request.signal.aborted && !deadline.timedOut) {
+      // The caller vanished before the answer — nothing useful to send; log it
+      // honestly instead of reporting an adapter crash.
+      logEvent("info", "client_disconnected", { requestId, adapter: adapter.name })
+      return errorResponse("upstream_error", { allowedOrigin })
+    }
+    if (deadline.timedOut) return providerTimeoutResponse(adapter, requestId, allowedOrigin)
     return upstreamErrorResponse(error, adapter, requestId, allowedOrigin)
   }
+  deadline.dispose()
+  return jsonResponse({ reply: success.reply }, 200, allowedOrigin)
+}
+
+/** One logged, documented 504 — the shared tail of both endpoints. */
+function providerTimeoutResponse(
+  adapter: ProviderAdapter,
+  requestId: string,
+  allowedOrigin: string | null,
+): Response {
+  logEvent("error", "provider_timeout", {
+    requestId,
+    adapter: adapter.name,
+    timeoutMs: PROVIDER_TIMEOUT_MS,
+  })
+  return errorResponse("provider_timeout", { allowedOrigin })
 }
 
 /**
@@ -109,10 +138,21 @@ async function handleStreamingChat(
   if (request.signal.aborted) clientGone.abort()
   else request.signal.addEventListener("abort", () => clientGone.abort(), { once: true })
 
+  // The deadline shares the disconnect chain (whoever fires first wins) and
+  // caps the whole provider interaction — pre-flight plus every delta.
+  const deadline = providerDeadline(PROVIDER_TIMEOUT_MS, clientGone.signal)
+
   let upstream: AdapterStream
   try {
-    upstream = await adapter.stream(input, env, clientGone.signal)
+    upstream = await adapter.stream(input, env, deadline.signal)
   } catch (error) {
+    deadline.dispose()
+    if (request.signal.aborted && !deadline.timedOut) {
+      // The caller left during pre-flight; nothing useful to send.
+      logEvent("info", "stream_client_disconnected", { requestId, adapter: adapter.name })
+      return errorResponse("upstream_error", { allowedOrigin })
+    }
+    if (deadline.timedOut) return providerTimeoutResponse(adapter, requestId, allowedOrigin)
     // Pre-flight failure — no SSE bytes sent yet, so the client still gets the
     // standard JSON envelope with the honest status (429, 502, 503, 500…).
     return upstreamErrorResponse(error, adapter, requestId, allowedOrigin)
@@ -127,7 +167,7 @@ async function handleStreamingChat(
 
   // Detached pump: the Response (status + headers) is committed the moment it is
   // returned — from here on, failures ride the stream as error events.
-  void pumpStream(upstream.deltas, send, writer, clientGone, adapter, requestId)
+  void pumpStream(upstream.deltas, send, writer, clientGone, adapter, requestId, deadline)
 
   return new Response(readable, {
     status: 200,
@@ -135,13 +175,15 @@ async function handleStreamingChat(
   })
 }
 
-async function pumpStream(
+/** Exported for tests (deadline + disconnect branches need a real pump). */
+export async function pumpStream(
   deltas: AsyncGenerator<string, void, void>,
   send: (event: string, data: unknown) => Promise<void>,
   writer: WritableStreamDefaultWriter<Uint8Array>,
   clientGone: AbortController,
   adapter: ProviderAdapter,
   requestId: string,
+  deadline: ProviderDeadline,
 ): Promise<void> {
   try {
     for await (const text of deltas) {
@@ -158,6 +200,22 @@ async function pumpStream(
       logEvent("info", "stream_client_disconnected", { requestId, adapter: adapter.name })
       return
     }
+    if (deadline.timedOut) {
+      // The deadline killed the provider request mid-stream: one documented
+      // error event, then close — the same wire shape as any other failure.
+      logEvent("error", "provider_timeout", {
+        requestId,
+        adapter: adapter.name,
+        timeoutMs: PROVIDER_TIMEOUT_MS,
+      })
+      try {
+        await send("error", { error: { code: "provider_timeout" } })
+        await writer.close()
+      } catch {
+        // The pipe died mid-report: the disconnect is the cause, not a new fault.
+      }
+      return
+    }
     const code = error instanceof UpstreamError ? error.code : "upstream_error"
     logEvent("error", "stream_failed", {
       requestId,
@@ -172,6 +230,8 @@ async function pumpStream(
     } catch {
       // The pipe died mid-report: the disconnect is the cause, not a new fault.
     }
+  } finally {
+    deadline.dispose()
   }
 }
 

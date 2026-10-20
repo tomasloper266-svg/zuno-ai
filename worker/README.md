@@ -59,6 +59,10 @@ data: {"reason":"stop"}
   below), then the stream closes — never a half-open stream.
 - A client disconnect aborts `request.signal`; the Worker cancels the provider
   request upstream and stops pulling deltas — no orphaned generation.
+- The whole provider interaction — pre-flight plus every delta — rides a 60 s
+  deadline (`src/providers/timeout.ts`): when it fires, streaming ends with one
+  `event: error` carrying code `provider_timeout`, the same shape as any other
+  mid-stream failure.
 - Gemini is streamed via `:streamGenerateContent?alt=sse` (text parts pass
   through as deltas); OpenAI via `"stream": true` chat completions, with
   `data: [DONE]` ending the stream.
@@ -100,6 +104,26 @@ response bodies are never proxied.
 | `upstream_error`  | 502    | Provider failed or returned garbage                                |
 | `over_capacity`   | 503    | Provider overloaded, or an unexpected internal failure             |
 | `config_error`    | 500    | Missing/bad `AI_API_KEY`, unknown `AI_PROVIDER`, bad model          |
+| `provider_timeout`| 504    | Provider exceeded its 60 s deadline (see "Timeouts & watchdog")     |
+
+## Timeouts & watchdog
+
+- **Worker → provider:** every provider call — `/chat` (both shapes) and
+  `/title` — runs under a **60 s** deadline (`PROVIDER_TIMEOUT_MS`,
+  `src/providers/timeout.ts`). The timer aborts the upstream `fetch`; a
+  `timedOut` flag distinguishes it from a client disconnect, so a gone caller
+  logs `client_disconnected` while a frozen provider logs `provider_timeout`
+  and answers `504 { error: { code: "provider_timeout" } }` — or, once
+  streaming has begun, one SSE `error` event with the same code, then close.
+  Timers are always disposed when the call settles; a fast provider never
+  leaves one behind.
+- **Client watchdog:** the frontend (`STREAM_WATCHDOG_MS` in
+  `src/lib/engine.ts`) auto-cancels a live stream that produces no data — no
+  delta, no done, no error — for **30 s**; any received event rearms the
+  clock. The partial text already shown is kept and committed; a watchdog
+  cancel with zero text shows the usual recovery banner. 30 s sits inside the
+  Worker's 60 s, so the Worker normally reports first and the watchdog only
+  covers connections that never deliver its error event.
 
 ## Rate limiting
 

@@ -7,7 +7,8 @@ import {
 } from "./http"
 import { checkRateLimit, hashIp, titleLimiterKey } from "./ratelimit"
 import { resolveAdapter } from "./providers/factory"
-import type { AdapterInput } from "./providers/types"
+import { PROVIDER_TIMEOUT_MS, providerDeadline } from "./providers/timeout"
+import type { AdapterInput, ProviderAdapter } from "./providers/types"
 import type { ChatTurn } from "./validate"
 
 /**
@@ -201,19 +202,43 @@ export async function handleTitle(
     temperature: TITLE_TEMPERATURE,
   }
 
+  const deadline = providerDeadline(PROVIDER_TIMEOUT_MS, request.signal)
+  let success: Awaited<ReturnType<ProviderAdapter["generate"]>>
   try {
-    const success = await adapter.generate(input, env)
-    const title = sanitizeTitle(success.reply)
-    if (title === "") {
-      // The provider answered with nothing usable — a provider failure, not an
-      // empty success: the client keeps its local heuristic title either way.
-      logEvent("error", "title_empty_reply", { requestId, adapter: adapter.name })
+    success = await adapter.generate(input, env, deadline.signal)
+  } catch (error) {
+    deadline.dispose()
+    if (request.signal.aborted && !deadline.timedOut) {
+      logEvent("info", "client_disconnected", { requestId, adapter: adapter.name })
       return errorResponse("upstream_error", { allowedOrigin })
     }
-    return jsonResponse({ title }, 200, allowedOrigin)
-  } catch (error) {
+    if (deadline.timedOut) return providerTimeoutResponse(adapter, requestId, allowedOrigin)
     return upstreamErrorResponse(error, adapter, requestId, allowedOrigin)
   }
+  deadline.dispose()
+
+  const title = sanitizeTitle(success.reply)
+  if (title === "") {
+    // The provider answered with nothing usable — a provider failure, not an
+    // empty success: the client keeps its local heuristic title either way.
+    logEvent("error", "title_empty_reply", { requestId, adapter: adapter.name })
+    return errorResponse("upstream_error", { allowedOrigin })
+  }
+  return jsonResponse({ title }, 200, allowedOrigin)
+}
+
+/** One logged, documented 504 — shared with handleChat (same codes, same shape). */
+function providerTimeoutResponse(
+  adapter: ProviderAdapter,
+  requestId: string,
+  allowedOrigin: string | null,
+): Response {
+  logEvent("error", "provider_timeout", {
+    requestId,
+    adapter: adapter.name,
+    timeoutMs: PROVIDER_TIMEOUT_MS,
+  })
+  return errorResponse("provider_timeout", { allowedOrigin })
 }
 
 /** Invalid requests share one client-visible code; the reason is logged only. */

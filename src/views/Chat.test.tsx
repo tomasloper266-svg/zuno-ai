@@ -378,6 +378,34 @@ describe('Chat streaming + stop behavior', () => {
     expect(contents(storedMessages(readState))).toEqual(['hello'])
     expect(screen.queryByRole('button', { name: t.chat.stopGenerating })).toBeNull()
   })
+
+  it('S5: the stall watchdog auto-cancel commits the partial the reader saw, with no banner and a settled composer', async () => {
+    replyMock.mockImplementation(async (_thread: ThreadMessage[], onDelta: (t: string) => void) => {
+      onDelta('watchdog partial')
+      return 'watchdog'
+    })
+    const readState = renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'old reply')]))
+
+    fireEvent.click(regenerateButton())
+
+    await screen.findByText('watchdog partial')
+    await waitFor(() => expect(contents(storedMessages(readState))).toEqual(['hello', 'watchdog partial']))
+    // Auto-cancel is not a crash and not the user's stop: what the reader saw is
+    // kept, no banner, and the streaming UI is fully released.
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByRole('button', { name: t.chat.stopGenerating })).toBeNull()
+  })
+
+  it('S6: watchdog auto-cancel before any delta shows the service recovery banner with a retry', async () => {
+    replyMock.mockResolvedValueOnce('watchdog')
+    renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'old reply')]))
+
+    fireEvent.click(regenerateButton())
+
+    const banner = await screen.findByRole('alert')
+    expect(banner.textContent).toContain(t.chat.errors.service.title)
+    expect(screen.queryByRole('button', { name: t.chat.retry })).toBeTruthy()
+  })
 })
 
 describe('Offline banner (truthful offline state)', () => {

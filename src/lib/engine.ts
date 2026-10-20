@@ -52,8 +52,20 @@ export class ChatRequestError extends Error {
 /** Retry-After at or below this marks a minute-scale burst limit, not an exhausted daily quota. */
 const BURST_RETRY_AFTER_MAX_SECONDS = 120
 
-/** How a streamed reply ended: normally, or cut short by the caller's abort. */
-export type StreamOutcome = 'completed' | 'aborted'
+/**
+ * Client watchdog: a live stream that produces no data — no delta, no done,
+ * no error — for this long is considered stalled, and the client cancels the
+ * request on its own instead of hanging until the user presses Stop. Any
+ * received event rearms the clock. Comfortably inside the Worker's own 60s
+ * provider deadline (worker/src/providers/timeout.ts), so the Worker usually
+ * reports first; the watchdog still covers a hung proxy or dead connection
+ * that never delivers the Worker's error event.
+ */
+export const STREAM_WATCHDOG_MS = 30_000
+
+/** How a streamed reply ended: normally ('completed'), cut by the caller
+ * ('aborted'), or auto-cancelled by the stall watchdog ('watchdog'). */
+export type StreamOutcome = 'completed' | 'aborted' | 'watchdog'
 
 /** Pause between demo-stream chunks — tuned to feel like live token arrival. */
 const DEMO_CHUNK_DELAY_MS = 55
@@ -151,82 +163,116 @@ export async function getAssistantReply(thread: ThreadMessage[]): Promise<string
  * Streamed variant of getAssistantReply: emits reply text incrementally through
  * `onDelta` as it arrives, honoring `signal` for the stop button. Resolves
  * 'completed' when the reply finished normally and 'aborted' when the caller
- * cut it — every other failure throws the usual ChatRequestError kinds.
+ * cut it. When no stream data arrives for STREAM_WATCHDOG_MS, the stall
+ * watchdog cancels the request on its own and 'watchdog' resolves — every
+ * other failure throws the usual ChatRequestError kinds. `options.watchdogMs`
+ * exists for tests; production callers take the default.
  */
 export async function streamAssistantReply(
   thread: ThreadMessage[],
   onDelta: (text: string) => void,
   signal: AbortSignal,
+  options?: { watchdogMs?: number },
 ): Promise<StreamOutcome> {
   if (!IS_DEMO) {
     // Never start a doomed request: an already-stopped generation stays stopped.
     if (signal.aborted) return 'aborted'
-    let res: Response
-    try {
-      res = await fetch(`${API_BASE}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: thread, stream: true }),
-        signal,
-      })
-    } catch (err) {
-      if (signal.aborted) return 'aborted'
-      // Only a genuine network-level failure (offline, DNS, refused) lands here —
-      // every HTTP response, including error responses, is classified by classifyFailure instead.
-      throw new ChatRequestError('connection', 'Chat request failed before a response arrived', { cause: err })
+    // The fetch watches one internal signal that merges the caller's abort
+    // (stop button) with the stall watchdog — either source kills the request.
+    const internal = new AbortController()
+    const forwardAbort = (): void => internal.abort()
+    if (signal.aborted) internal.abort()
+    else signal.addEventListener('abort', forwardAbort, { once: true })
+    const watchdogMs = options?.watchdogMs ?? STREAM_WATCHDOG_MS
+    let watchdog: ReturnType<typeof setTimeout> | undefined
+    const armWatchdog = (): void => {
+      if (watchdog !== undefined) clearTimeout(watchdog)
+      watchdog = setTimeout(() => internal.abort(), watchdogMs)
     }
-    if (!res.ok) throw await classifyFailure(res)
+    const disarmWatchdog = (): void => {
+      if (watchdog !== undefined) clearTimeout(watchdog)
+      watchdog = undefined
+    }
+    // The caller's stop wins over the watchdog when both race.
+    const settleOnAbort = (): StreamOutcome => (signal.aborted ? 'aborted' : 'watchdog')
 
-    const contentType = res.headers.get('Content-Type') ?? ''
-    // A backend predating the stream flag answers one-shot JSON — one delta.
-    if (contentType.includes('application/json')) {
-      let data: { reply?: unknown }
+    try {
+      let res: Response
       try {
-        data = (await res.json()) as { reply?: unknown }
+        armWatchdog()
+        res = await fetch(`${API_BASE}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: thread, stream: true }),
+          signal: internal.signal,
+        })
       } catch (err) {
-        throw new ChatRequestError('service', 'Chat API returned a 200 response that was not valid JSON', { cause: err })
-      }
-      if (typeof data.reply !== 'string' || data.reply.length === 0) {
-        throw new ChatRequestError('service', 'Chat API returned no reply')
-      }
-      if (!signal.aborted) onDelta(data.reply)
-      return 'completed'
-    }
-    if (res.body === null || !contentType.includes('text/event-stream')) {
-      throw new ChatRequestError('service', 'Chat API did not answer with an SSE stream')
-    }
-
-    try {
-      for await (const event of sseEvents(res.body)) {
         if (signal.aborted) return 'aborted'
-        if (event.event === 'delta') {
-          let text: unknown
-          try {
-            text = (JSON.parse(event.data) as { text?: unknown }).text
-          } catch (err) {
-            throw new ChatRequestError('service', 'Chat stream sent a malformed delta event', { cause: err })
-          }
-          if (typeof text === 'string' && text.length > 0) onDelta(text)
-        } else if (event.event === 'done') {
-          return 'completed'
-        } else if (event.event === 'error') {
-          // Mid-stream failure: the worker already reports its code inside the event.
-          let code = 'unknown'
-          try {
-            code = String((JSON.parse(event.data) as { error?: { code?: unknown } }).error?.code ?? 'unknown')
-          } catch {
-            // An unreadable error payload still means the stream failed.
-          }
-          throw new ChatRequestError('service', `Chat stream reported an error (code ${code})`)
-        }
+        if (internal.signal.aborted) return 'watchdog'
+        // Only a genuine network-level failure (offline, DNS, refused) lands here —
+        // every HTTP response, including error responses, is classified by classifyFailure instead.
+        throw new ChatRequestError('connection', 'Chat request failed before a response arrived', { cause: err })
       }
-    } catch (err) {
-      if (signal.aborted) return 'aborted'
-      throw err instanceof ChatRequestError ? err : new ChatRequestError('service', 'Failed while reading the chat stream', { cause: err })
+      if (!res.ok) throw await classifyFailure(res)
+
+      const contentType = res.headers.get('Content-Type') ?? ''
+      // A backend predating the stream flag answers one-shot JSON — one delta.
+      if (contentType.includes('application/json')) {
+        let data: { reply?: unknown }
+        try {
+          data = (await res.json()) as { reply?: unknown }
+        } catch (err) {
+          if (internal.signal.aborted) return settleOnAbort()
+          throw new ChatRequestError('service', 'Chat API returned a 200 response that was not valid JSON', { cause: err })
+        }
+        if (typeof data.reply !== 'string' || data.reply.length === 0) {
+          throw new ChatRequestError('service', 'Chat API returned no reply')
+        }
+        if (!signal.aborted) onDelta(data.reply)
+        return 'completed'
+      }
+      if (res.body === null || !contentType.includes('text/event-stream')) {
+        throw new ChatRequestError('service', 'Chat API did not answer with an SSE stream')
+      }
+
+      try {
+        for await (const event of sseEvents(res.body)) {
+          if (internal.signal.aborted) return settleOnAbort()
+          // Data arrived — the stream is alive; rearm the watchdog clock.
+          armWatchdog()
+          if (event.event === 'delta') {
+            let text: unknown
+            try {
+              text = (JSON.parse(event.data) as { text?: unknown }).text
+            } catch (err) {
+              throw new ChatRequestError('service', 'Chat stream sent a malformed delta event', { cause: err })
+            }
+            if (typeof text === 'string' && text.length > 0) onDelta(text)
+          } else if (event.event === 'done') {
+            return 'completed'
+          } else if (event.event === 'error') {
+            // Mid-stream failure: the worker already reports its code inside the event.
+            let code = 'unknown'
+            try {
+              code = String((JSON.parse(event.data) as { error?: { code?: unknown } }).error?.code ?? 'unknown')
+            } catch {
+              // An unreadable error payload still means the stream failed.
+            }
+            throw new ChatRequestError('service', `Chat stream reported an error (code ${code})`)
+          }
+        }
+      } catch (err) {
+        if (signal.aborted) return 'aborted'
+        if (internal.signal.aborted) return 'watchdog'
+        throw err instanceof ChatRequestError ? err : new ChatRequestError('service', 'Failed while reading the chat stream', { cause: err })
+      }
+      // The stream closed without done or error — the reply may be truncated, so
+      // this is a service failure, not a silent success.
+      throw new ChatRequestError('service', 'Chat stream closed before the reply finished')
+    } finally {
+      disarmWatchdog()
+      signal.removeEventListener('abort', forwardAbort)
     }
-    // The stream closed without done or error — the reply may be truncated, so
-    // this is a service failure, not a silent success.
-    throw new ChatRequestError('service', 'Chat stream closed before the reply finished')
   }
 
   // Demo mode: a short human-feeling pause, then the scripted reply paced out

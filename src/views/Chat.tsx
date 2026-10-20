@@ -267,8 +267,10 @@ export function Chat({
           const firstUser = thread.find((m) => m.role === 'user')?.content ?? ''
           requestSmartTitleFor(convId, firstUser, text)
         }
-      } else if (outcome === 'completed') {
-        // The stream finished but carried no reply text at all.
+      } else if (outcome === 'completed' || outcome === 'watchdog') {
+        // No reply text at all: an empty completion, or a stream the stall
+        // watchdog auto-cancelled before the first delta — either way a
+        // recovery banner, never silence.
         setErrorKind('service')
       }
     } catch (err) {

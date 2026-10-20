@@ -563,6 +563,21 @@
   padding: 1px 5px;
   cursor: help;
 }
+/* A reply cut short by the stop button or the stall watchdog: calm and clearly
+   distinct from a complete reply. The logical inline-start edge covers RTL and
+   LTR alike; no animation, so reduced-motion needs no exception. */
+.bubble.assistant.is-stopped {
+  border-inline-start: 3px solid var(--border-strong);
+}
+.stopped-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
 .bubble-action {
   font-size: 11.5px;
   color: var(--text-faint);

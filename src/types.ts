@@ -11,6 +11,12 @@ export interface Message {
    * model (see toThread) — that also keeps threads from starting assistant-first.
    */
   seeded?: boolean
+  /**
+   * True when this reply was cut short before finishing — the stop button or
+   * the stall watchdog — and the partial text shown so far was kept. Rendered
+   * with a distinct visual state (see MessageBubble); absent on normal replies.
+   */
+  stopped?: boolean
 }
 
 export interface Conversation {

@@ -246,14 +246,16 @@ export function Chat({
         controller.signal,
       )
       if (text.length > 0) {
-        // Completed or stopped midway: the text the reader saw is the text that
-        // gets committed — truthful in both cases.
+        // Completed, stopped midway, or watchdog-cancelled midway: the text the
+        // reader saw is the text that gets committed — truthful in all three.
+        // Cut-short replies carry `stopped` so the bubble shows the badge.
         const assistantMessage: Message = {
           id: uid(),
           role: 'assistant',
           content: text,
           ts: Date.now(),
           demo: IS_DEMO,
+          ...(outcome !== 'completed' ? { stopped: true } : {}),
         }
         // One atomic state update: commit the reply AND swap the provisional
         // title for the heuristic one (no-op once the title is finalized).

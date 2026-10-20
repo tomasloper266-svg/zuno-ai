@@ -39,3 +39,38 @@ describe('MessageBubble is-latest completion-pulse hook', () => {
     expect(document.querySelector('.bubble.assistant')?.classList.contains('is-latest')).toBe(false)
   })
 })
+
+describe('MessageBubble stopped-state snapshot (stop button / watchdog)', () => {
+  it('a stopped reply carries the is-stopped edge class and the Stopped badge', () => {
+    render(
+      <MessageBubble
+        message={{ ...msg('assistant', 'a1'), stopped: true }}
+        t={t}
+        isLastAssistant={false}
+        onRegenerate={() => {}}
+      />,
+    )
+    const bubble = document.querySelector('.bubble.assistant')
+    expect(bubble).not.toBeNull()
+    expect(bubble?.classList.contains('is-stopped')).toBe(true)
+    expect(document.querySelector('.stopped-tag')?.textContent).toBe(t.chat.stopped)
+  })
+
+  it('a normal reply never shows the badge or the edge class (completed vs stopped stay distinct)', () => {
+    render(<MessageBubble message={msg('assistant', 'a1')} t={t} isLastAssistant onRegenerate={() => {}} />)
+    expect(document.querySelector('.bubble.assistant')?.classList.contains('is-stopped')).toBe(false)
+    expect(document.querySelector('.stopped-tag')).toBeNull()
+  })
+
+  it('the badge localizes — Arabic shows موقوف', () => {
+    render(
+      <MessageBubble
+        message={{ ...msg('assistant', 'a1'), stopped: true }}
+        t={strings.ar}
+        isLastAssistant={false}
+        onRegenerate={() => {}}
+      />,
+    )
+    expect(document.querySelector('.stopped-tag')?.textContent).toBe('موقوف')
+  })
+})

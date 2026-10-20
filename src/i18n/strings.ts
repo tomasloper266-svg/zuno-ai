@@ -58,6 +58,8 @@ export interface Strings {
     retry: string
     /** Stop button shown while a reply is streaming in. */
     stopGenerating: string
+    /** Badge on a reply cut short by the stop button or the stall watchdog. */
+    stopped: string
     errors: Record<ChatErrorKind, BannerCopy>
     /** Shown instead of errors.connection when the browser reports being offline. */
     offline: BannerCopy
@@ -132,6 +134,7 @@ export const strings: Record<Lang, Strings> = {
       regenerate: 'Regenerate',
       retry: 'Retry',
       stopGenerating: 'Stop generating',
+      stopped: 'Stopped',
       errors: {
         connection: {
           title: 'Something went wrong',
@@ -227,6 +230,7 @@ export const strings: Record<Lang, Strings> = {
       regenerate: 'إعادة التوليد',
       retry: 'إعادة المحاولة',
       stopGenerating: 'إيقاف التوليد',
+      stopped: 'موقوف',
       errors: {
         connection: {
           title: 'حدث خطأ ما',

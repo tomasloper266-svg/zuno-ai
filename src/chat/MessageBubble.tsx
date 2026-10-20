@@ -15,6 +15,9 @@ interface MessageBubbleProps {
 export function MessageBubble({ message, t, isLastAssistant, onRegenerate }: MessageBubbleProps): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const isUser = message.role === 'user'
+  // A reply the stop button or the stall watchdog cut short — always visually
+  // distinct from a complete reply (badge + a calm edge), in both RTL and LTR.
+  const isStopped = !isUser && message.stopped === true
 
   async function handleCopy(): Promise<void> {
     if (await copyText(message.content)) {
@@ -32,10 +35,11 @@ export function MessageBubble({ message, t, isLastAssistant, onRegenerate }: Mes
         {/* is-latest marks the newest assistant reply — the CSS completion-pulse
             hook (zuno-complete). isLastAssistant is only true for assistant
             messages, so user bubbles never carry it. */}
-        <div className={`bubble ${message.role}${isLastAssistant ? ' is-latest' : ''}`} dir="auto">
+        <div className={`bubble ${message.role}${isLastAssistant ? ' is-latest' : ''}${isStopped ? ' is-stopped' : ''}`} dir="auto">
           {isUser ? message.content : renderMarkdown(message.content)}
         </div>
         <div className="bubble-meta">
+          {isStopped && <span className="stopped-tag">{t.chat.stopped}</span>}
           {!isUser && message.demo === true && <span className="demo-tag" title={t.chat.demoNote}>DEMO</span>}
           {!isUser && (
             <button

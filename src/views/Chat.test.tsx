@@ -310,6 +310,8 @@ describe('Chat streaming + stop behavior', () => {
 
     // Committed exactly once as the new last message; streaming UI fully settled.
     expect(contents(storedMessages(readState))).toEqual(['hello', 'part one, part two'])
+    // A completed reply is never flagged stopped.
+    expect(storedMessages(readState)[1]?.stopped).toBeUndefined()
     expect(screen.queryByRole('button', { name: t.chat.stopGenerating })).toBeNull()
     expect(screen.queryByText(streamingBubble('part one,'))).toBeNull()
   })
@@ -337,8 +339,9 @@ describe('Chat streaming + stop behavior', () => {
 
     fireEvent.click(screen.getByRole('button', { name: t.chat.stopGenerating }))
 
-    // The partial text the reader saw is exactly what gets committed.
+    // The partial text the reader saw is exactly what gets committed — flagged stopped.
     await waitFor(() => expect(contents(storedMessages(readState))).toEqual(['hello', 'partial text,']))
+    expect(storedMessages(readState)[1]?.stopped).toBe(true)
     expect(signals[0]?.aborted).toBe(true)
     // Stopping is not a failure: no banner, no retry offered, composer back to send.
     expect(screen.queryByRole('alert')).toBeNull()
@@ -390,6 +393,7 @@ describe('Chat streaming + stop behavior', () => {
 
     await screen.findByText('watchdog partial')
     await waitFor(() => expect(contents(storedMessages(readState))).toEqual(['hello', 'watchdog partial']))
+    expect(storedMessages(readState)[1]?.stopped).toBe(true)
     // Auto-cancel is not a crash and not the user's stop: what the reader saw is
     // kept, no banner, and the streaming UI is fully released.
     expect(screen.queryByRole('alert')).toBeNull()

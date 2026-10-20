@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { LIMITS, validateChatBody, type ValidationResult } from "../src/validate"
+import { bodyByteLength, LIMITS, validateChatBody, type ValidationResult } from "../src/validate"
 
 function expectInvalid(body: unknown): void {
   const result = validateChatBody(safeStringify(body))
@@ -126,5 +126,24 @@ describe("validateChatBody — rejected requests", () => {
 
   it("rejects messages without a role", () => {
     expectInvalid({ messages: [{ content: "where is the role?" }] })
+  })
+})
+
+describe("bodyByteLength — the wire quantity the size caps guard", () => {
+  it("counts ASCII one byte per character", () => {
+    expect(bodyByteLength("")).toBe(0)
+    expect(bodyByteLength("a".repeat(100))).toBe(100)
+  })
+
+  it("counts Arabic at two UTF-8 bytes per letter", () => {
+    // Arabic letters live in U+0600–U+06FF: one UTF-16 unit, two UTF-8 bytes.
+    expect(bodyByteLength("مرحبا")).toBe(10) // 5 letters × 2 bytes
+    expect(bodyByteLength("مرحبا".repeat(100))).toBe(1000)
+  })
+
+  it("counts astral characters at four bytes where raw.length sees two units", () => {
+    const glyph = "\u{10348}" // one code point, two UTF-16 units, four UTF-8 bytes
+    expect(glyph.length).toBe(2) // raw.length undercounts
+    expect(bodyByteLength(glyph)).toBe(4)
   })
 })

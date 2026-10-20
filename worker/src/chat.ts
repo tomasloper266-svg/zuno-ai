@@ -6,7 +6,7 @@ import {
   logEvent,
   upstreamErrorResponse,
 } from "./http"
-import { LIMITS, validateChatBody } from "./validate"
+import { bodyByteLength, LIMITS, validateChatBody } from "./validate"
 import { resolveAdapter } from "./providers/factory"
 import { SYSTEM_PROMPT } from "./prompt"
 import {
@@ -44,7 +44,7 @@ export async function handleChat(
   }
 
   const raw = await request.text()
-  if (raw.length > LIMITS.maxBodyBytes) {
+  if (bodyByteLength(raw) > LIMITS.maxBodyBytes) {
     return invalid(requestId, "body exceeds size cap", allowedOrigin)
   }
 

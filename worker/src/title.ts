@@ -9,7 +9,7 @@ import { checkRateLimit, hashIp, titleLimiterKey } from "./ratelimit"
 import { resolveAdapter } from "./providers/factory"
 import { PROVIDER_TIMEOUT_MS, providerDeadline } from "./providers/timeout"
 import type { AdapterInput, ProviderAdapter } from "./providers/types"
-import type { ChatTurn } from "./validate"
+import { bodyByteLength, type ChatTurn } from "./validate"
 
 /**
  * POST /title — ChatGPT-style conversation titles.
@@ -168,7 +168,7 @@ export async function handleTitle(
   }
 
   const raw = await request.text()
-  if (raw.length > TITLE_LIMITS.maxBodyBytes) {
+  if (bodyByteLength(raw) > TITLE_LIMITS.maxBodyBytes) {
     return invalid(requestId, "body exceeds size cap", allowedOrigin)
   }
 

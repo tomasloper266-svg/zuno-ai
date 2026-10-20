@@ -33,7 +33,8 @@ GET /health → 200 { "ok": true }
 
 Validation caps: 1–20 messages, 1–4000 chars per message, ≤8000 chars total,
 roles limited to `user`/`assistant`, `stream` must be a boolean when present,
-unknown fields dropped, body capped at 32 KiB before parsing. Requests without
+unknown fields dropped, body capped at 32 KiB of UTF-8 bytes (measured with
+`TextEncoder`, not `String.length`) before parsing. Requests without
 an `Origin` header (non-browser clients) are allowed; browser requests must
 come from an allow-listed origin.
 
@@ -74,7 +75,8 @@ data: {"reason":"stop"}
 ChatGPT-style titles: the frontend calls `/title` **once per conversation** after the
 first exchange commits. The body carries the first user message (`user`, required,
 ≤2000 chars) and the first assistant reply (`assistant`, optional, ≤1000 chars);
-the body is capped at 4 KiB before parsing. CORS, the error envelope, and the
+the body is capped at 4 KiB of UTF-8 bytes (measured with `TextEncoder`, not
+`String.length`) before parsing. CORS, the error envelope, and the
 provider adapter stack are exactly the ones `/chat` uses.
 
 - The system prompt is strict: a 3–6 word title in the user's language, no quotes,

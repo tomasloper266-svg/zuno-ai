@@ -23,6 +23,15 @@ export const LIMITS = {
   maxBodyBytes: 32768,
 } as const
 
+/**
+ * UTF-8 byte length of a raw request body — the wire quantity the size cap
+ * guards. Content-Length reports bytes; `raw.length` counts UTF-16 code units
+ * and undercounts multi-byte text (Arabic 2 bytes/char, emoji 4).
+ */
+export function bodyByteLength(raw: string): number {
+  return new TextEncoder().encode(raw).length
+}
+
 export type ValidationResult =
   | { ok: true; turns: ChatTurn[]; totalChars: number; stream: boolean }
   | { ok: false; reason: string }

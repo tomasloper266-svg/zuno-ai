@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it } from "vitest"
 import { SELF, fetchMock } from "cloudflare:test"
 import { resetDb } from "./schema"
+import { TITLE_LIMITS } from "../src/title"
 
 /**
  * Full contract test of POST /title through the deployed worker (SELF),
@@ -267,5 +268,32 @@ describe("POST /title — independent rate-limit bucket", () => {
     expect(blocked.status).toBe(429)
     const otherIp = await SELF.fetch(titleRequest({ ip: "198.51.100.10" }))
     expect(otherIp.status).toBe(200)
+  })
+})
+
+describe("POST /title — raw-body byte cap", () => {
+  it("keeps the 4 KiB cap exact — a body one byte over is rejected before parsing", async () => {
+    const prefix = '{"user":"'
+    const suffix = '"}'
+    const atCap = prefix + "a".repeat(TITLE_LIMITS.maxBodyBytes - prefix.length - suffix.length) + suffix
+    expect(new TextEncoder().encode(atCap).length).toBe(TITLE_LIMITS.maxBodyBytes)
+    expect((await SELF.fetch(titleRequest({ body: atCap }))).status).toBe(400)
+
+    const res = await SELF.fetch(titleRequest({ body: prefix + "a".repeat(TITLE_LIMITS.maxBodyBytes + 1 - prefix.length - suffix.length) + suffix }))
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: { code: "invalid_request" } })
+  })
+
+  it("counts multi-byte text in UTF-8 bytes, not characters", async () => {
+    // Valid under the character limits (user 1,500 ≤ 2,000; assistant 800 ≤ 1,000)
+    // but ~4.6 KB in UTF-8 bytes: the old `raw.length` (char) check let this
+    // through; the byte cap rejects it before parsing.
+    const body = JSON.stringify({ user: "ب".repeat(1500), assistant: "ج".repeat(800) })
+    expect(body.length).toBeLessThan(TITLE_LIMITS.maxBodyBytes)
+    expect(new TextEncoder().encode(body).length).toBeGreaterThan(TITLE_LIMITS.maxBodyBytes)
+
+    const res = await SELF.fetch(titleRequest({ body }))
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: { code: "invalid_request" } })
   })
 })

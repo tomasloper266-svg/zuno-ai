@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it } from "vitest"
 import { SELF, fetchMock } from "cloudflare:test"
 import { resetDb } from "./schema"
+import { LIMITS } from "../src/validate"
 
 /**
  * Full contract test of POST /chat through the deployed worker (SELF),
@@ -192,5 +193,27 @@ describe("POST /chat — contract", () => {
     }
     const blocked = await SELF.fetch(chatRequest({ ip: "198.51.100.9" }))
     expect(blocked.status).toBe(429)
+  })
+})
+
+describe("POST /chat — raw-body byte cap", () => {
+  /** An ASCII body of exactly `n` bytes (byte math is char math for ASCII). */
+  function bodyOfSize(n: number): string {
+    const prefix = '{"messages":[{"role":"user","content":"'
+    const suffix = '"}]}'
+    return prefix + "a".repeat(n - prefix.length - suffix.length) + suffix
+  }
+
+  it("keeps the 32 KiB cap exact — a body one byte over is rejected before parsing", async () => {
+    // No VALID body can reach this cap (message limits keep valid bodies near
+    // 8 KiB) — it is a raw-size guard, so both boundary bodies end in the same
+    // invalid_request envelope; the cap merely decides before parsing.
+    const atCap = bodyOfSize(LIMITS.maxBodyBytes)
+    expect(new TextEncoder().encode(atCap).length).toBe(LIMITS.maxBodyBytes)
+    expect((await SELF.fetch(chatRequest({ body: atCap }))).status).toBe(400)
+
+    const res = await SELF.fetch(chatRequest({ body: bodyOfSize(LIMITS.maxBodyBytes + 1) }))
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: { code: "invalid_request" } })
   })
 })

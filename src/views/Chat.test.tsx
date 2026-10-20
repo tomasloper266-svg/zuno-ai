@@ -565,3 +565,147 @@ describe('Composer limit enforcement (input-box limits from the Worker contract)
     expect(sendButton().hasAttribute('disabled')).toBe(false)
   })
 })
+
+describe('Pending reset on every end path — a conversation never stays stuck', () => {
+  /** Two conversations so every path test can also switch and delete. Titles
+   * are pinned (titleProvisional: false) — the first commit must not rewrite
+   * them into heuristic names and break the accessible-name lookups. */
+  function twoConversations(): Conversation[] {
+    return [
+      { id: 'conv-1', title: 'first', createdAt: 1, titleProvisional: false, messages: [msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'first reply')] },
+      { id: 'conv-2', title: 'second', createdAt: 2, titleProvisional: false, messages: [msg('user', 'n1', 'other conversation')] },
+    ]
+  }
+
+  function draftBox(): HTMLTextAreaElement {
+    return screen.getByRole('textbox', { name: t.chat.placeholder }) as HTMLTextAreaElement
+  }
+
+  function sendButton(): HTMLButtonElement {
+    return screen.getByRole('button', { name: t.send }) as HTMLButtonElement
+  }
+
+  /** The generating state must be gone the moment a path ends: no stop button,
+   * and a fresh draft immediately enables sending again. */
+  async function expectSettled(): Promise<void> {
+    await waitFor(() => expect(screen.queryByRole('button', { name: t.chat.stopGenerating })).toBeNull())
+    fireEvent.change(draftBox(), { target: { value: 'next message' } })
+    expect(sendButton().hasAttribute('disabled')).toBe(false)
+  }
+
+  function switchToSecond(): void {
+    fireEvent.click(screen.getByRole('button', { name: 'second' }))
+    expect(screen.getByText('other conversation')).not.toBeNull()
+  }
+
+  it('P1: clean completion releases the conversation — send, switch, and delete all work', async () => {
+    streamReplyWith('done reply')
+    const readState = renderChat(twoConversations())
+
+    fireEvent.click(regenerateButton())
+    await expectSettled()
+
+    switchToSecond()
+    fireEvent.click(screen.getByRole('button', { name: 'first' }))
+    expect(screen.getByText('done reply')).not.toBeNull()
+
+    // Deleting the OTHER conversation works right after settle.
+    const deletes = screen.getAllByRole('button', { name: t.chat.delete })
+    fireEvent.click(deletes[1] ?? document.body)
+    expect(screen.queryByRole('button', { name: 'second' })).toBeNull()
+    expect(contents(readState().find((c) => c.id === 'conv-1')?.messages ?? [])).toEqual(['hello', 'done reply'])
+  })
+
+  it('P2: a zero-text stream failure shows the recovery banner and releases the conversation at once', async () => {
+    replyMock.mockRejectedValueOnce(new ChatRequestError('service', 'empty failure'))
+    const readState = renderChat(twoConversations())
+
+    fireEvent.click(regenerateButton())
+    await screen.findByRole('alert')
+    await expectSettled()
+
+    // The banner retry is immediately usable — the conversation is not stuck.
+    // Designed remove-and-resend semantics: the popped reply stays gone, and
+    // the retry commits a fresh reply after the user message.
+    streamReplyWith('recovered after empty failure')
+    fireEvent.click(screen.getByRole('button', { name: t.chat.retry }))
+    await waitFor(() =>
+      expect(contents(readState().find((c) => c.id === 'conv-1')?.messages ?? [])).toEqual([
+        'hello',
+        'recovered after empty failure',
+      ]),
+    )
+
+    // Switching still works after the whole recovery (it clears the banner —
+    // designed — but the conversation is free).
+    switchToSecond()
+  })
+
+  it('P3: the user stop (before any delta) releases the conversation immediately', async () => {
+    replyMock.mockImplementation(
+      (_thread: ThreadMessage[], _onDelta: (t: string) => void, signal: AbortSignal) =>
+        new Promise<'completed' | 'aborted'>((resolve) => {
+          if (signal.aborted) {
+            resolve('aborted')
+            return
+          }
+          signal.addEventListener('abort', () => resolve('aborted'), { once: true })
+        }),
+    )
+    const readState = renderChat(twoConversations())
+
+    fireEvent.click(regenerateButton())
+    fireEvent.click(screen.getByRole('button', { name: t.chat.stopGenerating }))
+    await expectSettled()
+    switchToSecond()
+
+    // Designed remove-and-resend semantics: stopping before any text commits
+    // nothing and the popped reply stays gone — no partial, no loss of the
+    // user message, no banner.
+    fireEvent.click(screen.getByRole('button', { name: 'first' }))
+    expect(contents(readState().find((c) => c.id === 'conv-1')?.messages ?? [])).toEqual(['hello'])
+  })
+
+  it('P4: a watchdog outcome after a partial commits the partial and releases the conversation', async () => {
+    replyMock.mockImplementation(async (_thread: ThreadMessage[], onDelta: (t: string) => void) => {
+      onDelta('stalled partial,')
+      return 'watchdog'
+    })
+    const readState = renderChat(twoConversations())
+
+    fireEvent.click(regenerateButton())
+    await waitFor(() => expect(contents(readState().find((c) => c.id === 'conv-1')?.messages ?? [])).toEqual(['hello', 'stalled partial,']))
+    await expectSettled()
+    switchToSecond()
+  })
+
+  it('P5: a watchdog outcome with zero text shows the recovery banner and releases the conversation', async () => {
+    replyMock.mockResolvedValueOnce('watchdog')
+    const readState = renderChat(twoConversations())
+
+    fireEvent.click(regenerateButton())
+    await screen.findByRole('alert')
+    await expectSettled()
+    switchToSecond()
+
+    // Designed remove-and-resend semantics: the popped reply stays gone.
+    fireEvent.click(screen.getByRole('button', { name: 'first' }))
+    expect(contents(readState().find((c) => c.id === 'conv-1')?.messages ?? [])).toEqual(['hello'])
+  })
+
+  it('P6: a mid-stream failure with salvaged partials releases the conversation for sending and switching', async () => {
+    replyMock.mockImplementationOnce(async (_thread: ThreadMessage[], onDelta: (t: string) => void) => {
+      onDelta('failed midway partial,')
+      throw new ChatRequestError('service', 'stream failed midway')
+    })
+    const readState = renderChat(twoConversations())
+
+    fireEvent.click(regenerateButton())
+    await waitFor(() => expect(contents(readState().find((c) => c.id === 'conv-1')?.messages ?? [])).toEqual(['hello', 'failed midway partial,']))
+    await expectSettled()
+    switchToSecond()
+
+    fireEvent.click(screen.getByRole('button', { name: 'first' }))
+    expect(screen.getByRole('button', { name: t.chat.retry })).not.toBeNull()
+  })
+})

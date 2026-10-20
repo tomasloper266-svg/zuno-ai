@@ -8,6 +8,7 @@ import type { ChatErrorKind, ThreadMessage } from '../lib/engine'
 import { applyDerivedTitle } from '../lib/title'
 import { Sidebar } from '../chat/Sidebar'
 import { MessageBubble } from '../chat/MessageBubble'
+import { ConversationActions } from '../chat/ConversationActions'
 import { Composer } from '../chat/Composer'
 import { Brand, ZunoLogo } from '../components/ZunoLogo'
 import { Controls } from '../components/Controls'
@@ -320,6 +321,7 @@ export function Chat({
             <Brand compact />
           </button>
           <span className="header-spacer" />
+          <ConversationActions t={t} conversation={conversation} />
           {IS_DEMO && (
             <span className="demo-badge" title={t.chat.demoNote}>
               <span className="dot" />

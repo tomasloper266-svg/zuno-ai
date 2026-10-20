@@ -297,6 +297,60 @@
   background: var(--ok);
 }
 
+/* ---------- Conversation actions (header kebab menu) ---------- */
+.conv-actions {
+  position: relative;
+}
+.icon-btn.copied {
+  color: var(--ok);
+}
+.conv-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  inset-inline-end: 0;
+  z-index: 10;
+  min-width: 200px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-1);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  animation: zuno-menu-in var(--speed) var(--ease-out-soft) backwards;
+}
+@keyframes zuno-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.conv-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-align: start;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+  transition: background var(--speed) ease, color var(--speed) ease;
+}
+.conv-menu button:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.conv-menu button svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+
 /* ---------- Messages ---------- */
 .message-list {
   flex: 1;

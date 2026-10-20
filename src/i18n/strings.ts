@@ -49,6 +49,9 @@ export interface Strings {
     greeting: string
     copy: string
     copied: string
+    /** Header kebab menu holding conversation-level actions (copy, export). */
+    conversationActions: string
+    copyConversation: string
     regenerate: string
     retry: string
     /** Stop button shown while a reply is streaming in. */
@@ -118,6 +121,8 @@ export const strings: Record<Lang, Strings> = {
       greeting: "Hello! I'm ZUNO. How can I help you today?",
       copy: 'Copy',
       copied: 'Copied',
+      conversationActions: 'Conversation actions',
+      copyConversation: 'Copy conversation',
       regenerate: 'Regenerate',
       retry: 'Retry',
       stopGenerating: 'Stop generating',
@@ -205,6 +210,8 @@ export const strings: Record<Lang, Strings> = {
       greeting: 'مرحبًا! أنا زونو. كيف يمكنني مساعدتك اليوم؟',
       copy: 'نسخ',
       copied: 'تم النسخ',
+      conversationActions: 'إجراءات المحادثة',
+      copyConversation: 'نسخ المحادثة كاملة',
       regenerate: 'إعادة التوليد',
       retry: 'إعادة المحاولة',
       stopGenerating: 'إيقاف التوليد',

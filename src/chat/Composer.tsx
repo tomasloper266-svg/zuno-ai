@@ -8,9 +8,12 @@ interface ComposerProps {
   onChange: (value: string) => void
   onSend: (value: string) => void
   disabled: boolean
+  /** True while a reply is streaming in: the send button becomes the stop button. */
+  streaming: boolean
+  onStop: () => void
 }
 
-export function Composer({ t, value, onChange, onSend, disabled }: ComposerProps): React.JSX.Element {
+export function Composer({ t, value, onChange, onSend, disabled, streaming, onStop }: ComposerProps): React.JSX.Element {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -34,6 +37,8 @@ export function Composer({ t, value, onChange, onSend, disabled }: ComposerProps
     }
   }
 
+  // While a reply streams in, the send button's place is taken by an always-live
+  // stop button — one control, no layout shift, direction-neutral icon.
   return (
     <div className="composer">
       <textarea
@@ -50,14 +55,20 @@ export function Composer({ t, value, onChange, onSend, disabled }: ComposerProps
         <span className="composer-hint">{t.chat.hint}</span>
         <button
           type="button"
-          className="composer-send"
-          onClick={submit}
-          disabled={disabled || value.trim() === ''}
-          aria-label={t.send}
+          className={`composer-send${streaming ? ' is-stop' : ''}`}
+          onClick={streaming ? onStop : submit}
+          disabled={!streaming && (disabled || value.trim() === '')}
+          aria-label={streaming ? t.chat.stopGenerating : t.send}
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          {streaming ? (
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <rect x="7" y="7" width="10" height="10" rx="2" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
         </button>
       </div>
     </div>

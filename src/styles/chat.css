@@ -781,6 +781,25 @@
   width: 16px;
   height: 16px;
 }
+/* Streaming state: the stop button breathes once per typing-dot cycle, tying
+   it visually to the reply that is still arriving. */
+.composer-send.is-stop {
+  animation: zuno-stop-breath 1.1s infinite ease-in-out;
+}
+@keyframes zuno-stop-breath {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .composer-send.is-stop {
+    animation: none;
+  }
+}
 
 /* ---------- Arabic-first chat metrics ---------- */
 /* IBM Plex Sans Arabic sets taller; comfortable Arabic needs bigger optical

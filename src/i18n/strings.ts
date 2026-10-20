@@ -48,6 +48,8 @@ export interface Strings {
     copied: string
     regenerate: string
     retry: string
+    /** Stop button shown while a reply is streaming in. */
+    stopGenerating: string
     errors: Record<ChatErrorKind, BannerCopy>
     delete: string
     you: string
@@ -113,6 +115,7 @@ export const strings: Record<Lang, Strings> = {
       copied: 'Copied',
       regenerate: 'Regenerate',
       retry: 'Retry',
+      stopGenerating: 'Stop generating',
       errors: {
         connection: {
           title: 'Something went wrong',
@@ -197,6 +200,7 @@ export const strings: Record<Lang, Strings> = {
       copied: 'تم النسخ',
       regenerate: 'إعادة التوليد',
       retry: 'إعادة المحاولة',
+      stopGenerating: 'إيقاف التوليد',
       errors: {
         connection: {
           title: 'حدث خطأ ما',

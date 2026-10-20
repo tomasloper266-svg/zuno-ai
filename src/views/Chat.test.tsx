@@ -1,31 +1,58 @@
 // @vitest-environment jsdom
 /**
  * Component regression suite for the Regenerate one-request invariant
- * (spec art_9nIltQLr §4.3, tests T1–T6).
+ * (spec art_9nIltQLr §4.3, tests T1–T6) plus the streaming + stop behavior.
  *
  * Seam: the REAL `Chat` component rendered through a small harness that mirrors
  * App.tsx's exact wiring (conversations + activeId state, setConversations,
- * onSelect). Only the engine boundary is mocked — `getAssistantReply` via
+ * onSelect). Only the engine boundary is mocked — `streamAssistantReply` via
  * vi.mock/importActual, so `ChatRequestError`, `recentMessagesForRequest` and
  * `IS_DEMO` stay real. Every test drives the real click handlers
- * (Regenerate, banner Retry, Composer Send) — no handler is re-implemented.
+ * (Regenerate, banner Retry, Composer Send, Stop) — no handler is re-implemented.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useState } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Chat } from './Chat'
-import { ChatRequestError, getAssistantReply } from '../lib/engine'
+import { ChatRequestError, streamAssistantReply } from '../lib/engine'
+import type { ThreadMessage } from '../lib/engine'
 import { strings } from '../i18n/strings'
 import type { Conversation, Message } from '../types'
 
 vi.mock('../lib/engine', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/engine')>()
-  return { ...actual, getAssistantReply: vi.fn() }
+  return { ...actual, streamAssistantReply: vi.fn() }
 })
 
 const t = strings.en
-const replyMock = vi.mocked(getAssistantReply)
+const replyMock = vi.mocked(streamAssistantReply)
+
+/** Default streamed reply: one delta carrying `text`, then a clean completion. */
+function streamReplyWith(text: string): void {
+  replyMock.mockImplementation(async (_thread: ThreadMessage[], onDelta: (t: string) => void) => {
+    onDelta(text)
+    return 'completed'
+  })
+}
+
+/** A streamed reply that stays pending (never emitting) until the test calls
+ * `release` — which then emits one delta with `text` and completes the stream. */
+function replyStreamPending(
+  mock: ReturnType<typeof vi.mocked<typeof streamAssistantReply>>,
+  onPending: (release: () => void) => void,
+  text: string,
+): void {
+  mock.mockImplementation(
+    (_thread: ThreadMessage[], onDelta: (t: string) => void) =>
+      new Promise<'completed' | 'aborted'>((resolve) => {
+        onPending(() => {
+          onDelta(text)
+          resolve('completed')
+        })
+      }),
+  )
+}
 
 // Chat's auto-follow effect calls el.scrollTo(...) — jsdom does not implement
 // element scrolling, so provide a no-op when it is missing.
@@ -96,7 +123,7 @@ afterEach(() => {
 
 describe('Chat one-request invariant (spec T1–T6)', () => {
   it('T1: one Regenerate click starts exactly one request and replaces the reply', async () => {
-    replyMock.mockResolvedValue('regenerated reply')
+    streamReplyWith('regenerated reply')
     const readState = renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'first reply')]))
 
     fireEvent.click(regenerateButton())
@@ -107,7 +134,7 @@ describe('Chat one-request invariant (spec T1–T6)', () => {
   })
 
   it('T2: two rapid clicks in the same tick, before any re-render, start exactly one request', async () => {
-    replyMock.mockResolvedValue('regenerated once')
+    streamReplyWith('regenerated once')
     const readState = renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'first reply')]))
     const btn = regenerateButton()
 
@@ -136,7 +163,7 @@ describe('Chat one-request invariant (spec T1–T6)', () => {
   })
 
   it('T3: regenerate replaces only the last reply, keeps full history, and sends the remaining thread', async () => {
-    replyMock.mockResolvedValue('fresh reply')
+    streamReplyWith('fresh reply')
     const readState = renderChat(
       seededConversations([
         msg('user', 'm1', 'q1'),
@@ -164,7 +191,7 @@ describe('Chat one-request invariant (spec T1–T6)', () => {
 
   it('T4: a failed (429) regenerate shows the banner with one request; Retry re-sends exactly once and restores the reply', async () => {
     replyMock.mockRejectedValueOnce(new ChatRequestError('daily_limit', 'quota exhausted'))
-    replyMock.mockResolvedValueOnce('recovered reply')
+    streamReplyWith('recovered reply')
     const readState = renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'first reply')]))
 
     fireEvent.click(regenerateButton())
@@ -184,7 +211,7 @@ describe('Chat one-request invariant (spec T1–T6)', () => {
 
   it('T5: Send appends one user message and one reply with a single request', async () => {
     const user = userEvent.setup()
-    replyMock.mockResolvedValue('demo answer')
+    streamReplyWith('demo answer')
     const readState = renderChat([], null) // fresh app: no conversations yet
 
     await user.type(screen.getByRole('textbox', { name: t.chat.placeholder }), 'hi there')
@@ -206,13 +233,10 @@ describe('Chat one-request invariant (spec T1–T6)', () => {
 
   it('T6: banner Retry is guarded while pending — enabled once settled, banner clears during the retry, same-tick repeats start one request', async () => {
     replyMock.mockRejectedValueOnce(new ChatRequestError('daily_limit', 'quota exhausted'))
-    let releaseRetry!: (value: string) => void
-    replyMock.mockImplementationOnce(
-      () =>
-        new Promise<string>((resolve) => {
-          releaseRetry = resolve
-        }),
-    )
+    let releaseRetry!: () => void
+    replyStreamPending(replyMock, (release) => {
+      releaseRetry = release
+    }, 'recovered reply')
     const readState = renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'first reply')]))
 
     fireEvent.click(regenerateButton())
@@ -246,10 +270,112 @@ describe('Chat one-request invariant (spec T1–T6)', () => {
     expect(screen.queryByRole('alert')).toBeNull()
     expect(replyMock).toHaveBeenCalledTimes(2)
 
-    releaseRetry('recovered reply')
+    releaseRetry()
     await screen.findByText('recovered reply')
 
     expect(screen.queryByRole('alert')).toBeNull()
     expect(contents(storedMessages(readState))).toEqual(['hello', 'recovered reply'])
+  })
+})
+
+describe('Chat streaming + stop behavior', () => {
+  /** Custom text matcher: the live streaming bubble (never a typing indicator,
+   * never a committed MessageBubble which carries extra classes). */
+  function streamingBubble(text: string): (content: string, element: Element | null) => boolean {
+    return (_content, element) => element?.className === 'bubble assistant' && element.textContent === text
+  }
+
+  it('S1: renders deltas into the growing bubble as they arrive, then commits the full reply exactly once', async () => {
+    let emitSecond!: () => void
+    const second = new Promise<void>((resolve) => {
+      emitSecond = resolve
+    })
+    replyMock.mockImplementation(async (_thread: ThreadMessage[], onDelta: (t: string) => void) => {
+      onDelta('part one,')
+      await second
+      onDelta(' part two')
+      return 'completed'
+    })
+    const readState = renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'old reply')]))
+
+    fireEvent.click(regenerateButton())
+
+    // First delta is visible while still pending; stop button is the composer action.
+    await screen.findByText(streamingBubble('part one,'))
+    expect(screen.queryByText('part one, part two')).toBeNull()
+    expect(screen.getByRole('button', { name: t.chat.stopGenerating })).toBeTruthy()
+
+    emitSecond()
+    await screen.findByText('part one, part two')
+
+    // Committed exactly once as the new last message; streaming UI fully settled.
+    expect(contents(storedMessages(readState))).toEqual(['hello', 'part one, part two'])
+    expect(screen.queryByRole('button', { name: t.chat.stopGenerating })).toBeNull()
+    expect(screen.queryByText(streamingBubble('part one,'))).toBeNull()
+  })
+
+  it('S2: Stop aborts the in-flight stream and commits the partial text already received — no error banner', async () => {
+    const signals: AbortSignal[] = []
+    replyMock.mockImplementation(
+      (_thread: ThreadMessage[], onDelta: (t: string) => void, signal: AbortSignal) => {
+        signals.push(signal)
+        onDelta('partial text,')
+        return new Promise<'completed' | 'aborted'>((resolve) => {
+          if (signal.aborted) {
+            resolve('aborted')
+            return
+          }
+          signal.addEventListener('abort', () => resolve('aborted'), { once: true })
+        })
+      },
+    )
+    const readState = renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'old reply')]))
+
+    fireEvent.click(regenerateButton())
+    await screen.findByText(streamingBubble('partial text,'))
+    expect(replyMock).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole('button', { name: t.chat.stopGenerating }))
+
+    // The partial text the reader saw is exactly what gets committed.
+    await waitFor(() => expect(contents(storedMessages(readState))).toEqual(['hello', 'partial text,']))
+    expect(signals[0]?.aborted).toBe(true)
+    // Stopping is not a failure: no banner, no retry offered, composer back to send.
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByRole('button', { name: t.chat.stopGenerating })).toBeNull()
+  })
+
+  it('S3: stopping before the first delta commits nothing and shows no banner', async () => {
+    replyMock.mockImplementation(
+      (_thread: ThreadMessage[], _onDelta: (t: string) => void, signal: AbortSignal) =>
+        new Promise<'completed' | 'aborted'>((resolve) => {
+          if (signal.aborted) {
+            resolve('aborted')
+            return
+          }
+          signal.addEventListener('abort', () => resolve('aborted'), { once: true })
+        }),
+    )
+    const readState = renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'old reply')]))
+
+    fireEvent.click(regenerateButton())
+    await screen.findByRole('button', { name: t.chat.stopGenerating })
+    fireEvent.click(screen.getByRole('button', { name: t.chat.stopGenerating }))
+
+    // Popped reply stays gone, no partial text existed, so nothing is committed.
+    await waitFor(() => expect(screen.queryByRole('button', { name: t.chat.stopGenerating })).toBeNull())
+    expect(contents(storedMessages(readState))).toEqual(['hello'])
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('S4: a mid-stream failure surfaces the error banner; already-shown partial text is not committed', async () => {
+    replyMock.mockRejectedValueOnce(new ChatRequestError('service', 'stream failed midway'))
+    const readState = renderChat(seededConversations([msg('user', 'm1', 'hello'), msg('assistant', 'm2', 'old reply')]))
+
+    fireEvent.click(regenerateButton())
+    await screen.findByRole('alert')
+
+    expect(contents(storedMessages(readState))).toEqual(['hello'])
+    expect(screen.queryByRole('button', { name: t.chat.stopGenerating })).toBeNull()
   })
 })

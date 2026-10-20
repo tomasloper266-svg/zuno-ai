@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { Conversation, Message } from '../types'
 import { uid } from '../lib/util'
-import { getAssistantReply, recentMessagesForRequest, IS_DEMO, ChatRequestError } from '../lib/engine'
+import { renderMarkdown } from '../lib/markdown'
+import { recentMessagesForRequest, IS_DEMO, streamAssistantReply, ChatRequestError } from '../lib/engine'
 import type { ChatErrorKind, ThreadMessage } from '../lib/engine'
 import { Sidebar } from '../chat/Sidebar'
 import { MessageBubble } from '../chat/MessageBubble'
@@ -50,7 +51,13 @@ export function Chat({
   const [errorKind, setErrorKind] = useState<ChatErrorKind | null>(null)
   const [contextTrimmed, setContextTrimmed] = useState(false)
   const [draft, setDraft] = useState('')
+  // The reply being streamed in: accumulated text plus the conversation it
+  // belongs to, so the growing bubble only renders in its own conversation.
+  const [streamText, setStreamText] = useState('')
+  const [streamingConvId, setStreamingConvId] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  // AbortController of the in-flight stream — the stop button's handle.
+  const abortRef = useRef<AbortController | null>(null)
   // Synchronous in-flight guard shared by send/retry/regenerate — a plain ref,
   // not React state: it reads back true in the same tick it is set, so a second
   // activation arriving before React re-renders (stale closure, dispatch storm,
@@ -97,7 +104,7 @@ export function Chat({
       // Reader scrolled up to read history — never drag them down; offer a jump.
       setNewBelow(true)
     }
-  }, [activeConvId, messages.length, pending, errorKind])
+  }, [activeConvId, messages.length, pending, errorKind, streamText])
 
   // A trimmed-context notice describes one conversation's request, like an error
   // banner does — switching conversations or starting a new chat clears both.
@@ -125,6 +132,12 @@ export function Chat({
     setNewBelow(false)
   }
 
+  /** Cut the in-flight stream now: the engine resolves 'aborted' and whatever
+   * text already arrived is committed as the (partial) reply. */
+  function stopGenerating(): void {
+    abortRef.current?.abort()
+  }
+
   function upsertConversation(convId: string, updater: (conv: Conversation) => Conversation): void {
     setConversations((prev) => prev.map((c) => (c.id === convId ? updater(c) : c)))
   }
@@ -144,27 +157,51 @@ export function Chat({
     inFlightRef.current = true
     setPending(true)
     setErrorKind(null)
+    setStreamText('')
+    setStreamingConvId(convId)
     // Request-time trim only: the stored history keeps every message — just the
     // newest ones ride on the wire.
     const { messages, trimmed } = recentMessagesForRequest(thread)
     setContextTrimmed(trimmed)
+    // text mirrors the accumulated stream server-side — the final committed
+    // message content never reads React state back.
+    let text = ''
+    const controller = new AbortController()
+    abortRef.current = controller
     try {
-      const reply = await getAssistantReply(messages)
-      const assistantMessage: Message = {
-        id: uid(),
-        role: 'assistant',
-        content: reply,
-        ts: Date.now(),
-        demo: IS_DEMO,
+      const outcome = await streamAssistantReply(
+        messages,
+        (delta) => {
+          text += delta
+          setStreamText(text)
+        },
+        controller.signal,
+      )
+      if (text.length > 0) {
+        // Completed or stopped midway: the text the reader saw is the text that
+        // gets committed — truthful in both cases.
+        const assistantMessage: Message = {
+          id: uid(),
+          role: 'assistant',
+          content: text,
+          ts: Date.now(),
+          demo: IS_DEMO,
+        }
+        upsertConversation(convId, (conv) => ({ ...conv, messages: [...conv.messages, assistantMessage] }))
+      } else if (outcome === 'completed') {
+        // The stream finished but carried no reply text at all.
+        setErrorKind('service')
       }
-      upsertConversation(convId, (conv) => ({ ...conv, messages: [...conv.messages, assistantMessage] }))
     } catch (err) {
       // Only genuine network failures carry kind 'connection' — every other path
       // (quota, burst, service fault) is classified by the engine and told truthfully.
       setErrorKind(err instanceof ChatRequestError ? err.kind : 'service')
     } finally {
-      inFlightRef.current = false // released even on error, so retry stays usable
+      abortRef.current = null // released even on error, so retry stays usable
+      inFlightRef.current = false
       setPending(false)
+      setStreamText('')
+      setStreamingConvId(null)
     }
   }
 
@@ -332,7 +369,7 @@ export function Chat({
                   </button>
                 </div>
               )}
-              {pending && (
+              {pending && streamingConvId === activeConvId && streamText === '' && (
                 <div className="bubble-row assistant">
                   <span className="avatar assistant" aria-hidden="true">
                     <ZunoLogo size={20} />
@@ -341,6 +378,16 @@ export function Chat({
                     <span />
                     <span />
                     <span />
+                  </div>
+                </div>
+              )}
+              {pending && streamingConvId === activeConvId && streamText !== '' && (
+                <div className="bubble-row assistant">
+                  <span className="avatar assistant" aria-hidden="true">
+                    <ZunoLogo size={20} />
+                  </span>
+                  <div className="bubble assistant" dir="auto">
+                    {renderMarkdown(streamText)}
                   </div>
                 </div>
               )}
@@ -362,7 +409,15 @@ export function Chat({
               {t.chat.contextTrimmed}
             </p>
           )}
-          <Composer t={t} value={draft} onChange={setDraft} onSend={(v) => void send(v)} disabled={pending} />
+          <Composer
+            t={t}
+            value={draft}
+            onChange={setDraft}
+            onSend={(v) => void send(v)}
+            disabled={pending}
+            streaming={pending}
+            onStop={stopGenerating}
+          />
           {!IS_DEMO && (
             <p className="privacy-note" dir="auto">
               {t.chat.privacyNote}

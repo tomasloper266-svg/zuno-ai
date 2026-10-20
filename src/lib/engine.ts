@@ -4,8 +4,11 @@
  * Demo mode (default): replies are scripted and always labeled as demo in the
  * UI — they are never presented as output of a live AI model.
  * Live mode (optional): set VITE_API_URL to a backend that accepts
- * POST /chat  { messages: [{ role, content }, ...] }  and returns { reply: string }.
+ * POST /chat  { messages, stream? }  and answers either one-shot
+ * { reply: string } or an SSE stream of delta/done/error events.
  */
+
+import { sseEvents } from './sse'
 
 export interface ThreadMessage {
   role: 'user' | 'assistant'
@@ -47,6 +50,9 @@ export class ChatRequestError extends Error {
 
 /** Retry-After at or below this marks a minute-scale burst limit, not an exhausted daily quota. */
 const BURST_RETRY_AFTER_MAX_SECONDS = 120
+
+/** How a streamed reply ended: normally, or cut short by the caller's abort. */
+export type StreamOutcome = 'completed' | 'aborted'
 
 /** Worker error bodies are always { error: { code } } — tolerate anything else (an intermediary may serve a non-JSON error page). */
 async function readErrorCode(res: Response): Promise<string | null> {
@@ -116,6 +122,96 @@ export async function getAssistantReply(thread: ThreadMessage[]): Promise<string
   await new Promise((resolve) => setTimeout(resolve, 650 + Math.random() * 550))
   const lastUser = [...thread].reverse().find((m) => m.role === 'user')?.content ?? ''
   return demoReply(lastUser)
+}
+
+/**
+ * Streamed variant of getAssistantReply: emits reply text incrementally through
+ * `onDelta` as it arrives, honoring `signal` for the stop button. Resolves
+ * 'completed' when the reply finished normally and 'aborted' when the caller
+ * cut it — every other failure throws the usual ChatRequestError kinds.
+ */
+export async function streamAssistantReply(
+  thread: ThreadMessage[],
+  onDelta: (text: string) => void,
+  signal: AbortSignal,
+): Promise<StreamOutcome> {
+  if (!IS_DEMO) {
+    // Never start a doomed request: an already-stopped generation stays stopped.
+    if (signal.aborted) return 'aborted'
+    let res: Response
+    try {
+      res = await fetch(`${API_BASE}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: thread, stream: true }),
+        signal,
+      })
+    } catch (err) {
+      if (signal.aborted) return 'aborted'
+      // Only a genuine network-level failure (offline, DNS, refused) lands here —
+      // every HTTP response, including error responses, is classified by classifyFailure instead.
+      throw new ChatRequestError('connection', 'Chat request failed before a response arrived', { cause: err })
+    }
+    if (!res.ok) throw await classifyFailure(res)
+
+    const contentType = res.headers.get('Content-Type') ?? ''
+    // A backend predating the stream flag answers one-shot JSON — one delta.
+    if (contentType.includes('application/json')) {
+      let data: { reply?: unknown }
+      try {
+        data = (await res.json()) as { reply?: unknown }
+      } catch (err) {
+        throw new ChatRequestError('service', 'Chat API returned a 200 response that was not valid JSON', { cause: err })
+      }
+      if (typeof data.reply !== 'string' || data.reply.length === 0) {
+        throw new ChatRequestError('service', 'Chat API returned no reply')
+      }
+      if (!signal.aborted) onDelta(data.reply)
+      return 'completed'
+    }
+    if (res.body === null || !contentType.includes('text/event-stream')) {
+      throw new ChatRequestError('service', 'Chat API did not answer with an SSE stream')
+    }
+
+    try {
+      for await (const event of sseEvents(res.body)) {
+        if (signal.aborted) return 'aborted'
+        if (event.event === 'delta') {
+          let text: unknown
+          try {
+            text = (JSON.parse(event.data) as { text?: unknown }).text
+          } catch (err) {
+            throw new ChatRequestError('service', 'Chat stream sent a malformed delta event', { cause: err })
+          }
+          if (typeof text === 'string' && text.length > 0) onDelta(text)
+        } else if (event.event === 'done') {
+          return 'completed'
+        } else if (event.event === 'error') {
+          // Mid-stream failure: the worker already reports its code inside the event.
+          let code = 'unknown'
+          try {
+            code = String((JSON.parse(event.data) as { error?: { code?: unknown } }).error?.code ?? 'unknown')
+          } catch {
+            // An unreadable error payload still means the stream failed.
+          }
+          throw new ChatRequestError('service', `Chat stream reported an error (code ${code})`)
+        }
+      }
+    } catch (err) {
+      if (signal.aborted) return 'aborted'
+      throw err instanceof ChatRequestError ? err : new ChatRequestError('service', 'Failed while reading the chat stream', { cause: err })
+    }
+    // The stream closed without done or error — the reply may be truncated, so
+    // this is a service failure, not a silent success.
+    throw new ChatRequestError('service', 'Chat stream closed before the reply finished')
+  }
+
+  // Demo mode: a short human-feeling pause, then the scripted reply in one piece.
+  await new Promise((resolve) => setTimeout(resolve, 650 + Math.random() * 550))
+  if (signal.aborted) return 'aborted'
+  const lastUser = [...thread].reverse().find((m) => m.role === 'user')?.content ?? ''
+  onDelta(demoReply(lastUser))
+  return 'completed'
 }
 
 const ARABIC = /[\u0600-\u06FF]/

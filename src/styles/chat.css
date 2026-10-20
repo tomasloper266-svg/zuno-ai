@@ -214,6 +214,14 @@
   line-height: 1.7;
 }
 
+/* Local-only storage disclosure — quieter than the footer note above it. */
+.sidebar-footer .sidebar-storage-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 10.5px;
+  opacity: 0.85;
+}
+
 .sidebar-backdrop {
   display: none;
 }

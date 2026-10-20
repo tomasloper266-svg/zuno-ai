@@ -143,7 +143,10 @@ export function Sidebar({
           )}
         </nav>
 
-        <div className="sidebar-footer">{IS_DEMO ? t.footerNote : t.footerNoteLive}</div>
+        <div className="sidebar-footer">
+          {IS_DEMO ? t.footerNote : t.footerNoteLive}
+          <span className="sidebar-storage-note">{t.storageLocalNote}</span>
+        </div>
       </div>
     </aside>
   )

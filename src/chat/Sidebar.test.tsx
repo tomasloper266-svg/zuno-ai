@@ -78,3 +78,27 @@ describe('Sidebar conversation search', () => {
     expect(screen.getByText('خطة تعلم البرمجة')).toBeTruthy()
   })
 })
+
+describe('local-only storage disclosure', () => {
+  it('shows the sync disclosure in the sidebar footer (English)', () => {
+    renderSidebar()
+    expect(screen.getByText(/stored in this browser only and do not sync/i)).not.toBeNull()
+  })
+
+  it('shows the Arabic disclosure for Arabic UI strings', () => {
+    const tAr = strings.ar
+    render(
+      <Sidebar
+        t={tAr}
+        conversations={conversations}
+        activeId={null}
+        collapsed={false}
+        onSelect={() => {}}
+        onNew={() => {}}
+        onDelete={() => {}}
+        onHome={() => {}}
+      />,
+    )
+    expect(screen.getByText('المحادثات محفوظة في هذا المتصفح فقط ولا تنتقل بين الأجهزة.')).not.toBeNull()
+  })
+})

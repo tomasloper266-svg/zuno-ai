@@ -27,6 +27,8 @@ export interface Strings {
   version: string
   /** Gentle one-time banner when a conversation write fails (quota / private mode). */
   storageNotice: string
+  /** Local-only storage disclosure: conversations do not sync across devices. */
+  storageLocalNote: string
   entries: EntryItem[]
   nav: { theme: string; language: string; home: string }
   chat: {
@@ -98,6 +100,7 @@ export const strings: Record<Lang, Strings> = {
     footerNoteLive: 'Replies are generated live by Google Gemini · free-tier processing — see the privacy note in chat.',
     version: 'v0.1.0',
     storageNotice: "Couldn't save conversations in this browser — storage may be full. Your chat still works; new messages may not persist until space frees up.",
+    storageLocalNote: 'Conversations are stored in this browser only and do not sync across devices.',
     entries: [
       {
         id: 'coding',
@@ -204,6 +207,7 @@ export const strings: Record<Lang, Strings> = {
     footerNoteLive: 'الردود مُولّدة مباشرة عبر Gemini من Google · معالجة على الخطة المجانية — راجع ملاحظة الخصوصية داخل المحادثة.',
     version: 'إصدار 0.1.0',
     storageNotice: 'تعذّر حفظ المحادثات في هذا المتصفح — قد تكون المساحة ممتلئة. المحادثة تعمل، لكن قد لا تُحفظ الرسائل الجديدة حتى تتوفر مساحة.',
+    storageLocalNote: 'المحادثات محفوظة في هذا المتصفح فقط ولا تنتقل بين الأجهزة.',
     entries: [
       {
         id: 'coding',

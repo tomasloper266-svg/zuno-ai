@@ -51,6 +51,11 @@ export function Chat({
   const [contextTrimmed, setContextTrimmed] = useState(false)
   const [draft, setDraft] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
+  // Synchronous in-flight guard shared by send/retry/regenerate — a plain ref,
+  // not React state: it reads back true in the same tick it is set, so a second
+  // activation arriving before React re-renders (stale closure, dispatch storm,
+  // future non-standard path) can never start a second chat request.
+  const inFlightRef = useRef(false)
 
   // Stick-to-bottom auto-follow: track whether the reader is near the bottom
   // (direction-independent scrollTop math — identical in LTR and RTL).
@@ -133,6 +138,10 @@ export function Chat({
   }
 
   async function runAssistant(convId: string, thread: ThreadMessage[]): Promise<void> {
+    // Check-and-set happens synchronously, before any await or state update —
+    // the one-request invariant does not rely on React's flush timing.
+    if (inFlightRef.current) return
+    inFlightRef.current = true
     setPending(true)
     setErrorKind(null)
     // Request-time trim only: the stored history keeps every message — just the
@@ -154,13 +163,14 @@ export function Chat({
       // (quota, burst, service fault) is classified by the engine and told truthfully.
       setErrorKind(err instanceof ChatRequestError ? err.kind : 'service')
     } finally {
+      inFlightRef.current = false // released even on error, so retry stays usable
       setPending(false)
     }
   }
 
   async function send(text: string): Promise<void> {
     const clean = text.trim()
-    if (clean === '' || pending) return
+    if (clean === '' || pending || inFlightRef.current) return
     justSentRef.current = true
     const now = Date.now()
     const userMessage: Message = { id: uid(), role: 'user', content: clean, ts: now }
@@ -196,12 +206,14 @@ export function Chat({
   }
 
   function retry(): void {
-    if (conversation === null || pending || conversation.messages.length === 0) return
+    if (conversation === null || pending || inFlightRef.current || conversation.messages.length === 0) return
     void runAssistant(conversation.id, toThread(conversation.messages))
   }
 
   function regenerate(): void {
-    if (conversation === null || pending) return
+    // In-flight check MUST precede the history pop: a swallowed duplicate
+    // activation must never mutate the conversation.
+    if (conversation === null || pending || inFlightRef.current) return
     const msgs = [...conversation.messages]
     while (msgs.length > 0 && msgs[msgs.length - 1]?.role === 'assistant') {
       msgs.pop()
@@ -315,7 +327,7 @@ export function Chat({
                   <span>
                     {t.chat.errors[errorKind].title} — {t.chat.errors[errorKind].body}
                   </span>
-                  <button type="button" onClick={retry}>
+                  <button type="button" onClick={retry} disabled={pending}>
                     {t.chat.retry}
                   </button>
                 </div>
